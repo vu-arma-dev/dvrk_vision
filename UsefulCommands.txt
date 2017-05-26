@@ -1,0 +1,42 @@
+// CALIBRATE SINGLE CAM
+rosrun camera_calibration cameracalibrator.py --size 8x9 --square 0.01 image:=/camera/image_raw camera:=/camera0 --fix-principal-point --fix-aspect-ratio
+// CALIBRATE STEREO CAMS
+
+//TINY SQUARES
+rosrun camera_calibration cameracalibrator.py --size 8x9 --square 0.01 right:=/stereo/right/image_raw left:=/stereo/left/image_raw left_camera:=/stereo/left right_camera:=/stereo/right --approximate=0.01 --fix-principal-point --fix-aspect-ratio
+
+//LARGE SQUARES
+
+rosrun camera_calibration cameracalibratory --size 8x6 --square 0.0288 right:=/stereo/right/image_raw left:=/stereo/left/image_raw left_camera:=/stereo/left right_camera:=/stereo/right --approximate=0.01 --fix-principal-point
+
+//TEST CALIBRATION
+rosrun camera_calibration camerachecky -s 8x6 -q .0288 --approximate .03
+
+// FIX OUT OF MEMORY USB (two cameras)
+sudo rmmod uvcvideo
+sudo modprobe uvcvideo quirks=128
+
+// FOR CONFIGURING STEREO
+rosrun image_view stereo_view _approximate_sync:=True image:=image_rect_color
+rosrun rqt_reconfigure rqt_reconfigure
+// FOR SAVING STEREO CONFIG
+rosrun dynamic_reconfigure dynparam dump /stereo/stereo_image_proc /home/biomed/daVinci/catkin_ws/src/dvrk-vtk-registration/defaults/stereo_processing.yaml 
+
+//Stop auto white balance
+v4l2-ctl --set-ctrl white_balance_temperature_auto=0
+v4l2-ctl --set-ctrl backlight_compensation=1
+v4l2-ctl --set-ctrl exposure_auto=1
+v4l2-ctl --set-ctrl white_balance_temperature=2800
+v4l2-ctl --set-ctrl exposure_absolute=200
+v4l2-ctl --set-ctrl saturation=60
+v4l2-ctl --set-ctrl brightness=00
+v4l2-ctl --set-ctrl hue=20
+
+v4l2-ctl --device=1 --set-ctrl white_balance_temperature_auto=0
+v4l2-ctl --device=1 --set-ctrl backlight_compensation=1
+v4l2-ctl --device=1 --set-ctrl exposure_auto=1
+v4l2-ctl --device=1 --set-ctrl white_balance_temperature=2800
+v4l2-ctl --device=1 --set-ctrl exposure_absolute=200
+v4l2-ctl --device=1 --set-ctrl brightness=00
+v4l2-ctl --device=1 --set-ctrl saturation=60
+v4l2-ctl --device=1 --set-ctrl hue=20
