@@ -1,0 +1,69 @@
+<launch>
+  <arg name="width" default="640" />
+  <arg name="height" default="480" />
+  <arg name="fps" default="15" />
+
+  <arg name="compressed" default="true"/>
+  <!-- <arg name="format" value="YUYV"/> -->
+  <arg name="format" default="jpeg"/>
+
+  <arg name="camera_info_url_left" default="file://$(find dvrk_vision)/defaults/stereo_cam0_calibration_$(arg width)x$(arg height).yaml" />
+  <arg name="camera_info_url_right" default="file://$(find dvrk_vision)/defaults/stereo_cam1_calibration_$(arg width)x$(arg height).yaml" />
+
+  <arg name="frame" default="stereo_camera_frame" />
+  <arg name="device_left" default="/dev/video0" />
+  <arg name="output_topic_left" default="image_raw" />
+
+  <arg name="frame_right" default="stereo_right_frame" />
+  <arg name="device_right" default="/dev/video1" />
+  <arg name="output_topic_right" default="image_raw" />
+  <arg name="exposure" default="300" />
+  <arg name="white_balance" default="2800" />
+  <arg name="saturation" default="50" />
+  <arg name="brightness" default="0" />
+  <arg name="hue" default="20" />
+  
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="standalone_nodelet"  args="manager"/>
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="stereo_cams" args="load uvc_camera/StereoNodelet standalone_nodelet" output="screen">
+    <param name="width" value="$(arg width)" />
+    <param name="height" value="$(arg height)" />
+    <param name="fps" value="$(arg fps)" />
+    <param name="frame_id" value="$(arg frame)" />
+    <param name="format" value="$(arg format)"/>
+    <param name="left/device" value="$(arg device_left)" />
+    <param name="right/device" value="$(arg device_right)" />
+    <param name="skip_frames" value="0" />
+    <param name="left/camera_info_url" value="$(arg camera_info_url_left)" />
+    <param name="right/camera_info_url" value="$(arg camera_info_url_right)" />
+    <param name="white_balance_temperature" value="$(arg white_balance)"/>
+    <param name="auto_white_balance" value="100"/>
+    <param name="exposure_auto" value="1"/>
+    <param name="exposure_absolute" value="$(arg exposure)"/>
+    <param name="saturation" value="$(arg saturation)"/>
+    <param name="brightness" value="$(arg brightness)"/>
+    <param name="hue" value="$(arg hue)"/>
+  </node>
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="rectify_l"
+        args="load image_proc/rectify standalone_nodelet"
+        output="screen">
+    <param name="queue_size" value="1" />
+    <remap from="image_mono" to="left/image_raw"/>
+    <remap from="image_rect" to="left/image_rect"/>
+  </node>
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="rectify_r"
+        args="load image_proc/rectify standalone_nodelet"
+        output="screen">
+    <param name="queue_size" value="1" />
+    <remap from="image_mono" to="right/image_raw"/>
+    <remap from="image_rect" to="right/image_rect"/>
+  </node>
+
+  <group if="$(arg compressed)">
+    <node ns="stereo/right" name="republish" type="republish" pkg="image_transport" output="screen" args="_image_transport:=compressed compressed in:=image_raw/ raw out:=image_raw/" />
+    <node ns="stereo/left" name="republish" type="republish" pkg="image_transport" output="screen" args="_image_transport:=compressed compressed in:=image_raw/ raw out:=image_raw/" />
+  </group>
+  
+  <!-- Camera transform publisher -->
+  <node pkg="tf" type="static_transform_publisher" name="cam_tf_publisher" args="0.0 0.0 0.0 0.0 0.0 0.0  world $(arg frame) 100"/>
+
+</launch>
