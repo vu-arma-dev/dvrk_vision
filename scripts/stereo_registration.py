@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from point_cloud_registration import PointCloudRegistration
+# from point_cloud_registration import PointCloudRegistration
 from stereo_processing import StereoProcessing
 # from dual_quaternion_registration.qf_register import qf_register
 import numpy as np
@@ -19,15 +19,15 @@ if __name__ == '__main__':
     # Get txt file of fixed organ
     functionPath = os.path.dirname(os.path.realpath(__file__))
     stlFileName = os.path.join(functionPath,'..','defaults','femur.stl')
-    registration = PointCloudRegistration(stlFileName, .001)
+    # registration = PointCloudRegistration(stlFileName, .001)
 
     mask = stereo.mask
 
     while not rospy.is_shutdown():
         stereo.update()
-        registration.update(stereo.points)
-        # Reset registration if mask changes
-        if not np.allclose(mask, stereo.mask) and 0 in stereo.mask:
-            registration.reset()
-            mask = stereo.mask
+        # registration.update(stereo.points)
+        # # Reset registration if mask changes
+        # if not np.allclose(mask, stereo.mask) and 0 in stereo.mask:
+        #     registration.reset()
+        #     mask = stereo.mask
         rate.sleep()

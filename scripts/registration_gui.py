@@ -10,6 +10,7 @@ import cv2
 from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtktools
 from sensor_msgs.msg import Image, CameraInfo
+from std_msgs.msg import Bool
 from visualization_msgs.msg import Marker
 from graph_cut_node import SegmentedImage
 from cv_bridge import CvBridge, CvBridgeError
@@ -104,9 +105,6 @@ class RegistrationWindow(QtGui.QMainWindow):
         # Check whether this is the left (primary) or the right (secondary) window
         self.isPrimaryWindow = parentWindow == None
         side = "left" if self.isPrimaryWindow else "right"
-        if self.isPrimaryWindow:
-            # Connect buttons to functions
-            self.registerButton.clicked.connect(self.register)
 
         # RosThread.update = self.update
         self.rosThread = RosThread()
@@ -119,17 +117,8 @@ class RegistrationWindow(QtGui.QMainWindow):
         # Set up vtk background image
         msg = rospy.wait_for_message(imgSubTopic, Image, timeout=2)
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        self.imgDims = image.shape
         self.segmentation = SegmentedImage()
         self.segmentation.setImage(image)
-
-        # Set up subscriber for registered organ position
-        poseSubTopic = namespace + "/organMarker"
-        poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
-
-        # Set up publisher for masking
-        pubTopic = namespace + "/" + side + "/image_rect_mask"
-        self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=10)
 
         # Add vtk widget
         self.vl = QtGui.QVBoxLayout()
@@ -138,7 +127,7 @@ class RegistrationWindow(QtGui.QMainWindow):
         self.vtkFrame.setLayout(self.vl)
 
         # Set up vtk camera using camera info
-        self.bgImage = vtktools.makeVtkImage(self.imgDims[0:2])
+        self.bgImage = vtktools.makeVtkImage(image.shape[0:2])
         self.renWin = self.vtkWidget.GetRenderWindow()
         camInfo = rospy.wait_for_message(namespace + "/" + side + "/camera_info", CameraInfo, timeout=2)
         intrinsicMatrix, extrinsicMatrix = vtkCameraFromCamInfo(camInfo)
@@ -162,6 +151,24 @@ class RegistrationWindow(QtGui.QMainWindow):
         self.actor_moving.GetProperty().SetOpacity(0.35)
         self._updateActorPolydata(self.actor_moving, transformFilter.GetOutput(), (0,1, 0))
         self.ren.AddActor(self.actor_moving)
+
+        # Set up subscriber for registered organ position
+        poseSubTopic = namespace + "/registration_marker"
+        poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
+
+        # Set up publisher for masking
+        pubTopic = namespace + "/" + side + "/image_rect_mask"
+        self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=1)
+
+        # Set up registration button
+        pubTopic = namespace + "/registration/reset"
+        self.resetPub = rospy.Publisher(pubTopic, Bool, queue_size=1)
+        pubTopic = namespace + "/registration/toggle"
+        self.active = False;
+        self.activePub = rospy.Publisher(pubTopic, Bool, queue_size=1)
+        if self.isPrimaryWindow:
+            # Connect buttons to functions
+            self.registerButton.clicked.connect(self.register)
 
         # Setup interactor
         self.iren = self.renWin.GetInteractor()
@@ -218,8 +225,10 @@ class RegistrationWindow(QtGui.QMainWindow):
         actor.GetProperty().SetColor(color[0], color[1], color[2])
 
     def register(self):
-        # TODO
-        pass
+        self.active = not self.active
+        self.activePub.publish(self.active)
+        if self.active:
+            self.resetPub.publish(True)
 
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)

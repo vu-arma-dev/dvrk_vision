@@ -68,8 +68,8 @@ class StereoProcessing:
 
         namespaceL = namespace+"/left"
         namespaceR = namespace+"/right"
-        camInfoL = rospy.wait_for_message(namespaceL + "/camera_info", CameraInfo, timeout=2)
-        camInfoR = rospy.wait_for_message(namespaceR + "/camera_info", CameraInfo, timeout=2)
+        camInfoL = rospy.wait_for_message(namespaceL + "/camera_info", CameraInfo)
+        camInfoR = rospy.wait_for_message(namespaceR + "/camera_info", CameraInfo)
 
         # Set up variables for publishing stereo points
         self.pcl_pub = rospy.Publisher(namespace+"/point_cloud", PointCloud2, queue_size=1)
@@ -95,28 +95,6 @@ class StereoProcessing:
         self.points = np.zeros((1,3))
 
         self.Q = get_reprojection_matrix(camInfoL.P,camInfoR.P, self.downsample)
-
-        # # Build reprojection matrix from camera info http://stackoverflow.com/questions/27374970/q-matrix-for-the-reprojectimageto3d-function-in-opencv
-        # self.Q = np.identity(4)
-        # self.Q[2,2] = 0
-        # # self.Q[0:3,0:3] = np.linalg.inv([camInfoL.R[0:3],camInfoL.R[3:6],camInfoL.R[6:9]])
-        # self.Q[3,2] = -1 / (camInfoR.P[3] / camInfoR.P[0])
-        # self.Q[3,3] = (camInfoL.P[2] - camInfoR.P[2]) / camInfoR.P[3]
-        # self.Q[0,3] = -camInfoL.P[2] / 2**self.downsample
-        # self.Q[1,3] = -camInfoL.P[6] / 2**self.downsample
-        # self.Q[2,3] = camInfoL.P[0] / 2**self.downsample
-
-        # # Build reprojection matrix from camera info
-        # self.Q = np.identity(4)
-        # self.Q[2,2] = 0
-        # # self.Q[0:3,0:3] = np.linalg.inv([camInfoL.R[0:3],camInfoL.R[3:6],camInfoL.R[6:9]])
-        # self.Q[3,2] = -camInfoR.P[3] / 2 # Get baseline
-        # self.Q[0,3] = -camInfoL.P[2] / 2**self.downsample
-        # self.Q[1,3] = -camInfoL.P[6] / 2**self.downsample
-        # self.Q[2,3] = camInfoL.P[0] / 2**self.downsample
-        
-        # print self.Q
-
 
         # Set up subscribers for capturing images
         self.imgSubL = rospy.Subscriber(namespaceL + "/image_rect", Image, self.imageCbL)
@@ -193,9 +171,10 @@ if __name__ == '__main__':
 
     # Initialize the node
     rospy.init_node("stereo_processing")
-    rate = rospy.Rate(30) # 30hz
+    rate = rospy.Rate(5) # 30hz
     
-    stereo = StereoProcessing("/stereo")
+    stereo = StereoProcessing("/stereo", maskTopic="/stereo/left/image_rect_mask")
 
     while not rospy.is_shutdown():
+        stereo.update()
         rate.sleep()
