@@ -2,7 +2,6 @@
 import numpy as np
 import rospy
 import cv2
-import cv2.cv as cv
 import tf2_ros
 from tf import transformations
 from sensor_msgs.msg import Image
@@ -145,7 +144,11 @@ class ImageSegmenter:
             self.maskPubR.publish(self.bridge.cv2_to_imgmsg(self.R.mask*255, "mono8"))
             img = np.concatenate((img, img2), axis=1)
         cv2.imshow('Segmentation', img)
-        cv.SetMouseCallback('Segmentation', self.onMouse, 0)
+        (cv_major, cv_minor, _) = cv2.__version__.split(".")
+        if cv_major < 3:
+            cv2.cv.SetMouseCallback('Segmentation', self.onMouse, 0)
+        else:
+            cv2.SetMouseCallback('Segmentation', self.onMouse, 0)
         cv2.waitKey(30)
 
     def imageCallbackL(self,data):

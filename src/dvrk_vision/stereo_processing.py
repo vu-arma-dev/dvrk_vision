@@ -28,6 +28,11 @@ def pack_bytes(array):
     x = (array[0] << 16) + (array[1] << 8) + array[2]
     return np.float32(struct.unpack('f', struct.pack('I', x))[0])
 
+def callback(config, level):
+    rospy.loginfo("""Reconfigure Request: {int_param}, {double_param},\ 
+          {str_param}, {bool_param}, {size}""".format(**config))
+    return config
+
 def get_reprojection_matrix(projectionMatrixL, projectionMatrixR, downsample):
     # Projection/camera matrix from ROS camera_info message
     #     [fx   0  cx  Tx] cx, cy are principal points of left camera in pixels
@@ -79,18 +84,33 @@ class StereoProcessing:
         # disparity range is hardcoded for now
         window_size = 3
         min_disp = 16*int(5 / 2**self.downsample)
-        num_disp = 16*int(10 / 2**self.downsample) - min_disp
-        self.stereo = cv2.StereoSGBM(minDisparity = min_disp,
-                                     numDisparities = num_disp,
-                                     SADWindowSize = window_size,
-                                     uniquenessRatio = 45,
-                                     speckleWindowSize = 200,
-                                     speckleRange = 10, 
-                                     disp12MaxDiff = 1,
-                                     P1 = 8*3*window_size**2,
-                                     P2 = 32*3*window_size**2,
-                                     fullDP = False
-        )
+        print "MIN DISP :" + str(min_disp) + "\n\n\n"
+        num_disp = 16*int(20 / 2**self.downsample) - min_disp
+
+        (cv_major, cv_minor, _) = cv2.__version__.split(".")
+
+        if cv_major < 3:
+            self.stereo = cv2.StereoSGBM(minDisparity = min_disp,
+                                         numDisparities = num_disp,
+                                         SADWindowSize = window_size,
+                                         uniquenessRatio = 45,
+                                         speckleWindowSize = 200,
+                                         speckleRange = 10, 
+                                         disp12MaxDiff = 1,
+                                         P1 = 8*3*window_size**2,
+                                         P2 = 32*3*window_size**2,
+                                         fullDP = False)
+        else:
+            self.stereo = cv2.StereoSGBM_create(minDisparity = 69,
+                                                numDisparities = 32,
+                                                blockSize = 3,
+                                                preFilterCap = 41,
+                                                uniquenessRatio = 57,
+                                                speckleWindowSize = 57,
+                                                speckleRange = 32, 
+                                                disp12MaxDiff = 0,
+                                                P1 = 200,
+                                                P2 = 400)
 
         self.points = np.zeros((1,3))
 

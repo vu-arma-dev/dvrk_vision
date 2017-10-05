@@ -17,7 +17,7 @@ dictitems:
       groups: !!python/object/new:dynamic_reconfigure.encoding.Config
         state: []
       id: 0
-      min_disparity: 79
+      min_disparity: 69
       name: Default
       parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
         state: []
@@ -32,7 +32,7 @@ dictitems:
       type: ''
       uniqueness_ratio: 57.0
     state: []
-  min_disparity: 79
+  min_disparity: 69
   prefilter_cap: 41
   prefilter_size: 5
   speckle_range: 23

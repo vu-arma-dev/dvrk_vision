@@ -8,16 +8,26 @@ project(dvrk_vision)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  rospy
+  roscpp
   cv_bridge
   geometry_msgs
-  sensor_msgs
   sensor_msgs
   tf
   tf2_ros
   visualization_msgs
+  nodelet
+  nodelet_topic_tools
+  image_transport
+  image_geometry
+  image_proc
+  stereo_image_proc
+  message_generation
+  dynamic_reconfigure
 )
 
 find_package(OpenCV 2 REQUIRED)
+
 include_directories(${OpenCV_INCLUDE_DIRS})
 # target_link_libraries(my_awesome_library ${OpenCV_LIBRARIES})
 
@@ -28,7 +38,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
-# catkin_python_setup()
+catkin_python_setup()
 
 ################################################
 ## Declare ROS messages, services and actions ##
@@ -61,12 +71,11 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 #   Message2.msg
 # )
 
-## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+# Generate services in the 'srv' folder
+add_service_files(
+  FILES
+  Register.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -111,10 +120,23 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES dvrk_vision
-#  CATKIN_DEPENDS cv2 cv_bridge geometry_msgs sensor_msgs sensor_msgs tf tf2_ros visualization_msgs
-#  DEPENDS system_lib
+   # INCLUDE_DIRS include
+   LIBRARIES ${PROJECT_NAME}
+   CATKIN_DEPENDS rospy
+				  roscpp
+				  cv_bridge
+				  geometry_msgs
+				  sensor_msgs
+				  tf
+				  tf2_ros
+				  visualization_msgs
+				  nodelet
+				  nodelet_topic_tools
+				  image_transport
+				  image_geometry
+				  image_proc
+          bingham_registration
+   DEPENDS OpenCV
 )
 
 ###########
@@ -129,9 +151,13 @@ include_directories(
 )
 
 ## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/dvrk_vision.cpp
-# )
+add_library(${PROJECT_NAME}
+  src/rectify.cpp
+  src/point_cloud2.cpp
+  src/window_thread.cpp
+)
+
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -141,7 +167,14 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/dvrk_vision_node.cpp)
+# Standalone node
+add_executable(stereo_proc_exe src/stereo_proc.cpp)
+target_link_libraries(stereo_proc_exe ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+SET_TARGET_PROPERTIES(stereo_proc_exe PROPERTIES OUTPUT_NAME stereo_proc)
+
+add_executable(stereo_viewer_exe src/stereo_viewer.cpp)
+target_link_libraries(stereo_viewer_exe ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+SET_TARGET_PROPERTIES(stereo_viewer_exe PROPERTIES OUTPUT_NAME stereo_viewer)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

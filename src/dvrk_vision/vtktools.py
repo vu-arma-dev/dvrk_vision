@@ -100,7 +100,7 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     renWin.SetNumberOfLayers(2)
 
     # Create foreground renderer for stl object
-    ren=vtk.vtkRenderer()
+    ren = vtk.vtkRenderer()
     ren.SetLayer(1)
     renWin.AddRenderer(ren)
     imgDims = bgImage.GetDimensions()

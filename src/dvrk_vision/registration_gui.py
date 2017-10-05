@@ -1,13 +1,23 @@
 #!/usr/bin/env python
 import sys
 import os
-from PyQt4 import QtGui, uic
-from PyQt4.QtCore import QThread
 import vtk
 import numpy as np
 import rospy
+import rospkg
 import cv2
-from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+# Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
+if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
+    import PyQt5.QtWidgets as QtGui
+    import PyQt5.uic as uic
+    from PyQt5.QtCore import QThread
+    _QT_VERSION = 5
+    from QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+else:
+    from PyQt4 import QtGui, uic
+    from PyQt4.QtCore import QThread
+    _QT_VERSION = 4
+    from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtktools
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Bool
@@ -15,6 +25,8 @@ from visualization_msgs.msg import Marker
 from graph_cut_node import SegmentedImage
 from cv_bridge import CvBridge, CvBridgeError
 from tf import transformations
+
+from IPython import embed
 
 functionPath = os.path.dirname(os.path.realpath(__file__))
 
@@ -54,50 +66,35 @@ def vtkCameraFromCamInfo(camInfo):
 
     return intrinsicMatrix, extrinsicMatrix
 
-class RegistrationInteractorStyle(vtk.vtkInteractorStyle):
-    # Interactor style for masking
-    def __init__(self, segmentedImage, parent=None):
-        self.segmentedImage = segmentedImage
-        self.AddObserver("MiddleButtonPressEvent",self.middleButtonPressEvent)
-        self.AddObserver("MiddleButtonReleaseEvent",self.middleButtonReleaseEvent)
-        self.AddObserver("LeftButtonPressEvent",self.leftButtonPressEvent)
-        self.AddObserver("LeftButtonReleaseEvent",self.leftButtonReleaseEvent)
-        self.AddObserver("MouseMoveEvent",self.mouseMoveEvent)
+def cleanResourcePath(path):
+    newPath = path
+    if path.find("package://") == 0:
+        newPath = newPath[len("package://"):]
+        pos = newPath.find("/")
+        if pos == -1:
+            rospy.logfatal("%s Could not parse package:// format", path)
+            quit(1)
 
-    def middleButtonPressEvent(self,obj,event):
-        return
- 
-    def middleButtonReleaseEvent(self,obj,event):
-        return
+        package = newPath[0:pos]
+        newPath = newPath[pos:]
+        package_path = rospkg.RosPack().get_path(package)
 
-    def leftButtonPressEvent(self,obj,event):
-        event = cv2.EVENT_LBUTTONDOWN
-        (x,y) = self.getMousePos()
-        self.segmentedImage.onMouse(event,x,y,0,0)
+        if package_path == "":
+            rospy.logfatal("%s Package [%s] does not exist",path.c_str(), package.c_str());
+            quit(1)
 
-    def leftButtonReleaseEvent(self,obj,event):
-        event = cv2.EVENT_LBUTTONUP
-        (x,y) = self.getMousePos()
-        self.segmentedImage.onMouse(event,x,y,0,0)
+        newPath = package_path + newPath;
+    elif path.find("file://") == 0:
+        newPath = newPath[len("file://"):]
 
-    def mouseMoveEvent(self,obj,event):
-        event = cv2.EVENT_MOUSEMOVE
-        (x,y) = self.getMousePos()
-        self.segmentedImage.onMouse(event,x,y,0,0)
+    if not os.path.isfile(newPath):
+        rospy.logfatal("%s file does not exist", newPath)
+        quit(1)
+    return newPath;
 
-    def getMousePos(self):
-        iren = self.GetInteractor ()
-        pos = iren.GetEventPosition()
-        windowShape =  iren.GetSize()
-        imageShape = self.segmentedImage.image.shape
-        ratio = imageShape[0] / float(windowShape[1])
-        offset = (windowShape[0] * ratio - imageShape[1]) / 2.0
-        x = int(pos[0] * ratio - offset)
-        y = imageShape[0] - int(pos[1] * ratio)
-        return (x,y)
+class RegistrationWindow(QtGui.QWidget):
 
-class RegistrationWindow(QtGui.QMainWindow):
-    def __init__(self, stlPath, scale=0.001, namespace="/stereo", parentWindow=None):
+    def __init__(self, meshPath, scale=1, namespace="/stereo", parentWindow=None):
 
         super(RegistrationWindow, self).__init__()
         uic.loadUi(functionPath + "/registration_gui.ui", self)
@@ -106,19 +103,19 @@ class RegistrationWindow(QtGui.QMainWindow):
         self.isPrimaryWindow = parentWindow == None
         side = "left" if self.isPrimaryWindow else "right"
 
-        # RosThread.update = self.update
-        self.rosThread = RosThread()
-
         # Set up subscriber for camera image
         self.bridge = CvBridge()
         imgSubTopic = namespace + "/"+side+"/image_rect"
         imageSub = rospy.Subscriber(imgSubTopic, Image, self.imageCallback)
-
+        
         # Set up vtk background image
-        msg = rospy.wait_for_message(imgSubTopic, Image, timeout=2)
+        msg = rospy.wait_for_message(imgSubTopic, Image)
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        self.segmentation = SegmentedImage()
-        self.segmentation.setImage(image)
+        if self.isPrimaryWindow:
+            self.segmentation = SegmentedImage()
+            self.segmentation.setImage(image)
+        else:
+            self.segmentation = parentWindow.segmentation
 
         # Add vtk widget
         self.vl = QtGui.QVBoxLayout()
@@ -139,43 +136,60 @@ class RegistrationWindow(QtGui.QMainWindow):
         self.zBuff = vtktools.zBuff(self.renWin)
 
         # Set up 3D actor for organ
-        self.stlReader = vtk.vtkSTLReader()
-        self.stlReader.SetFileName(stlPath)
-        self.stlReader.Update()
+        meshPath = cleanResourcePath(meshPath)
+        extension = os.path.splitext(meshPath)[1]
+        if extension == ".stl" or extension == ".STL":
+            meshReader = vtk.vtkSTLReader()
+        elif extension == ".obj" or extension == ".OBJ":
+            meshReader = vtk.vtkOBJReader()
+        else:
+            ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
+        meshReader.SetFileName(meshPath)
+        # Scale STL
         transform = vtk.vtkTransform()
         transform.Scale(scale,scale,scale)
         transformFilter = vtk.vtkTransformFilter()
         transformFilter.SetTransform(transform)
-        transformFilter.SetInputConnection(self.stlReader.GetOutputPort())
+        transformFilter.SetInputConnection(meshReader.GetOutputPort())
+        transformFilter.Update()
         self.actor_moving = vtk.vtkActor()
         self.actor_moving.GetProperty().SetOpacity(0.35)
-        self._updateActorPolydata(self.actor_moving, transformFilter.GetOutput(), (0,1, 0))
+        self._updateActorPolydata(self.actor_moving,
+                                  polydata=transformFilter.GetOutput(),
+                                  color=(0,1, 0))
+        # Hide actor
+        self.actor_moving.VisibilityOff()
         self.ren.AddActor(self.actor_moving)
 
         # Set up subscriber for registered organ position
         poseSubTopic = namespace + "/registration_marker"
         poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
 
-        # Set up publisher for masking
-        pubTopic = namespace + "/" + side + "/image_rect_mask"
-        self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=1)
+        if self.isPrimaryWindow:
+            # Set up publisher for masking
+            pubTopic = namespace + "/disparity_mask"
+            self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=1)
 
         # Set up registration button
         pubTopic = namespace + "/registration/reset"
         self.resetPub = rospy.Publisher(pubTopic, Bool, queue_size=1)
         pubTopic = namespace + "/registration/toggle"
-        self.active = False;
+        self.active = False
         self.activePub = rospy.Publisher(pubTopic, Bool, queue_size=1)
-        if self.isPrimaryWindow:
-            # Connect buttons to functions
-            self.registerButton.clicked.connect(self.register)
+        self.registerButton.clicked.connect(self.register)
+        self.stopButton.clicked.connect(self.stop)
 
         # Setup interactor
         self.iren = self.renWin.GetInteractor()
-        if self.isPrimaryWindow:
-            self.iren.SetInteractorStyle(RegistrationInteractorStyle(self.segmentation))
-        else:
-            self.iren.SetInteractorStyle(RegistrationInteractorStyle(parentWindow.segmentation))
+        self.iren.RemoveObservers('LeftButtonPressEvent')
+        self.iren.AddObserver('LeftButtonPressEvent', self.leftButtonPressEvent, 1.0)
+        self.iren.RemoveObservers('LeftButtonReleaseEvent')
+        self.iren.AddObserver('LeftButtonReleaseEvent', self.leftButtonReleaseEvent, 1.0)
+        self.iren.RemoveObservers('MouseMoveEvent')
+        self.iren.AddObserver('MouseMoveEvent', self.mouseMoveEvent, 1.0)
+        self.iren.RemoveObservers('MiddleButtonPressEvent')
+        self.iren.RemoveObservers('MiddleButtonPressEvent')
+        
         self.show()
         self.iren.Initialize()
         # Set up timer to refresh render
@@ -183,8 +197,32 @@ class RegistrationWindow(QtGui.QMainWindow):
         self.iren.AddObserver('TimerEvent', cb.execute)
         timerId = self.iren.CreateRepeatingTimer(30);
 
-        self.rosThread.start()
         self.iren.Start()
+
+    def leftButtonPressEvent(self,obj,event):
+        event = cv2.EVENT_LBUTTONDOWN
+        (x,y) = self.getMousePos()
+        self.segmentation.onMouse(event,x,y,0,0)
+
+    def leftButtonReleaseEvent(self,obj,event):
+        event = cv2.EVENT_LBUTTONUP
+        (x,y) = self.getMousePos()
+        self.segmentation.onMouse(event,x,y,0,0)
+
+    def mouseMoveEvent(self,obj,event):
+        event = cv2.EVENT_MOUSEMOVE
+        (x,y) = self.getMousePos()
+        self.segmentation.onMouse(event,x,y,0,0)
+
+    def getMousePos(self):
+        pos = self.iren.GetEventPosition()
+        windowShape =  self.iren.GetSize()
+        imageShape = self.segmentation.image.shape
+        ratio = imageShape[0] / float(windowShape[1])
+        offset = (windowShape[0] * ratio - imageShape[1]) / 2.0
+        x = int(pos[0] * ratio - offset)
+        y = imageShape[0] - int(pos[1] * ratio)
+        return (x,y)
 
     def imageCallback(self, data):
         # TODO no try catch
@@ -207,7 +245,8 @@ class RegistrationWindow(QtGui.QMainWindow):
         transform = vtk.vtkTransform()
         transform.Identity()
         transform.SetMatrix(mat.ravel())
-        self.actor_moving.SetUserTransform(transform)        
+        self.actor_moving.SetUserTransform(transform)
+        self.actor_moving.VisibilityOn()             
 
     def _updateActorPolydata(self,actor,polydata,color):
         # Modifies an actor with new polydata
@@ -225,14 +264,22 @@ class RegistrationWindow(QtGui.QMainWindow):
         actor.GetProperty().SetColor(color[0], color[1], color[2])
 
     def register(self):
-        self.active = not self.active
+        self.active = True
         self.activePub.publish(self.active)
-        if self.active:
-            self.resetPub.publish(True)
+        self.resetPub.publish(True)
+
+    def stop(self):
+        self.active = False
+        self.activePub.publish(self.active)
 
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
-    stlPath = functionPath+"/../defaults/femur.stl"
-    windowL = RegistrationWindow(stlPath)
-    windowR = RegistrationWindow(stlPath, parentWindow=windowL)
+
+    # RosThread.update = self.update
+    rosThread = RosThread()
+    meshPath = rospy.get_param("~mesh_path")
+    stlScale = rospy.get_param("~mesh_scale")
+    windowL = RegistrationWindow(meshPath, scale=stlScale)
+    windowR = RegistrationWindow(meshPath, scale=stlScale, parentWindow=windowL)
+    rosThread.start()
     sys.exit(app.exec_())

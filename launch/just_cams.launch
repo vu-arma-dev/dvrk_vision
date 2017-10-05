@@ -3,9 +3,9 @@
   <arg name="height" default="480" />
   <arg name="fps" default="15" />
 
-  <arg name="compressed" default="true"/>
-  <!-- <arg name="format" value="YUYV"/> -->
-  <arg name="format" default="jpeg"/>
+  <arg name="compressed" default="false"/>
+  <arg name="format" value="YUYV"/>
+<!--   <arg name="format" default="jpeg"/> -->
 
   <arg name="camera_info_url_left" default="file://$(find dvrk_vision)/defaults/stereo_cam0_calibration_$(arg width)x$(arg height).yaml" />
   <arg name="camera_info_url_right" default="file://$(find dvrk_vision)/defaults/stereo_cam1_calibration_$(arg width)x$(arg height).yaml" />
@@ -64,6 +64,6 @@
   </group>
   
   <!-- Camera transform publisher -->
-  <node pkg="tf" type="static_transform_publisher" name="cam_tf_publisher" args="0.0 0.0 0.0 0.0 0.0 0.0  world $(arg frame) 100"/>
+  <node pkg="tf" type="static_transform_publisher" name="cam_tf_publisher" args="0.0 0.0 0.32 1.0 0.0 0.0 0.0 world $(arg frame) 100"/>
 
 </launch>

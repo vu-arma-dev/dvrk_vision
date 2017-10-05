@@ -7,7 +7,7 @@ rosrun camera_calibration cameracalibrator.py --size 8x9 --square 0.01 right:=/s
 
 //LARGE SQUARES
 
-rosrun camera_calibration cameracalibratory --size 8x6 --square 0.0288 right:=/stereo/right/image_raw left:=/stereo/left/image_raw left_camera:=/stereo/left right_camera:=/stereo/right --approximate=0.01 --fix-principal-point
+rosrun camera_calibration cameracalibrator.py --size 9x6 --square 0.0254 right:=/stereo/right/image_raw left:=/stereo/left/image_raw left_camera:=/stereo/left right_camera:=/stereo/right --approximate=0.02 --fix-principal-point
 
 //TEST CALIBRATION
 rosrun camera_calibration camerachecky -s 8x6 -q .0288 --approximate .03

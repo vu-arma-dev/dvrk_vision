@@ -1,11 +1,42 @@
 <launch>
+  <arg name="path" default="package://dvrk_vision/defaults/femur.stl" />
+  <arg name="scale" default=".001" />
+
   <include file="$(find dvrk_vision)/launch/just_cams.launch"/>
-  <node ns="stereo" name="stereo_processing" type="stereo_processing.py" pkg="dvrk_vision" output="screen"/>
-  
-  <node ns="stereo" name="registration_gui" type="registration_gui.py" pkg="dvrk_vision" output="screen"/>
+
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="disparity"
+        args="load stereo_image_proc/disparity standalone_nodelet"
+        output="screen">
+    <param name="queue_size" value="5" />
+    <param name="approximate_sync" value="true" />
+  </node>
+
+  <node name="dynamic_reconfigure_load" pkg="dynamic_reconfigure" type="dynparam" args="load /stereo/disparity $(find dvrk_vision)/defaults/stereo_processing.yaml" />
+
+  <node ns="stereo" pkg="nodelet" type="nodelet" name="point_cloud"
+        args="load dvrk_vision/point_cloud2 standalone_nodelet">
+    <param name="queue_size" value="5" />
+    <remap from="left/image_rect_color" to="left/image_rect"/>
+    <remap from="right/image_rect_color" to="right/image_rect"/>
+    <param name="approximate_sync" value="true" />
+  </node>
+
+<!--   <node ns="stereo" pkg="nodelet" type="nodelet" name="disparity_viewer"
+        args="load dvrk_vision/disparity standalone_nodelet" output="screen">
+    <param name="autosize" value="true" />
+    <remap from="image" to="disparity"/>
+  </node> -->
+
+<!--   <node ns="stereo" name="stereo_processing" type="stereo_processing.py" pkg="dvrk_vision" output="screen"/> -->
+
+<!--   <node ns="stereo" name="registration_gui" type="registration_gui.py" pkg="dvrk_vision" output="screen">
+    <param name="mesh_path" value="$(arg path)"/>
+    <param name="mesh_scale" value="$(arg scale)"/>
+  </node> -->
 
   <node ns="stereo" name="bingham_registration" type="registration_node" pkg="bingham_registration" output="screen">
-    <param name="stl_path" value="package://dvrk_vision/defaults/femur.stl"/>
-    <param name="stl_scale" value="0.001"/>
+    <param name="mesh_path" value="$(arg path)"/>
+    <param name="mesh_scale" value="$(arg scale)"/>
+    <remap from="point_cloud" to="points2"/>
   </node>
 </launch>
