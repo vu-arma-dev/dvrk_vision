@@ -1,7 +1,12 @@
-
 import numpy as np
 from vtk.util import numpy_support
 import vtk
+# Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
+if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
+    from PyQt5.QtCore import QThread
+else:
+    from PyQt4.QtCore import QThread
+import rospy
 import cv2
 
 def npMatrixToVtkMatrix(matrix):
@@ -123,6 +128,46 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     
     # Way of getting camera: renWin.GetRenderers().GetFirstRenderer()
     return ren, backgroundRen
+
+class RosQThread(QThread):
+    # Qt thread designed to allow ROS to run in the background
+    def __init__(self, parent = None):
+        QThread.__init__(self, parent)
+        # Initialize the node
+        if rospy.get_node_uri() == None:
+            rospy.init_node("vtk_test")
+        self.rate = rospy.Rate(30) # 30hz
+    def run(self):
+        while not rospy.is_shutdown():
+            self.update()
+            self.rate.sleep()
+    def update(self):
+        pass
+
+class vtkTimerCallback():
+   # Callback that renders on a timer
+    def __init__(self, renWin):
+        self.renderWindows = [renWin]
+    def execute(self,obj,event):
+        for renWin in self.renderWindows:
+            renWin.Render()
+    def addRenWin(self,renWin):
+        self.renderWindows.append(renWin)
+
+
+def matrixFromCamInfo(camInfo):
+    # Get intrinsic matrix of rectified image
+    intrinsicMatrix = np.reshape(camInfo.P,(3,4))[0:3,0:3]
+    # Get camera extrinsic matrix
+    extrinsicMatrix = np.identity(4)
+    # Get extrinsic rotation
+    extrinsicMatrix [0:3,0:3] = np.reshape(camInfo.R,(3,3))
+    # Get baseline translation (will usually be zero as this is for left camera)
+    xBaseline = camInfo.P[3] / -camInfo.P[0]
+    yBaseline = camInfo.P[7] / -camInfo.P[5]
+    extrinsicMatrix [0:3,3] = [xBaseline, yBaseline, 0]
+
+    return intrinsicMatrix, extrinsicMatrix
 
 class zBuff:
     def __init__(self,renWin):

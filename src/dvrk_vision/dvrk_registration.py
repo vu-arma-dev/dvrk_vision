@@ -10,14 +10,21 @@ from image_geometry import StereoCameraModel
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
+from rigid_transform_3d import rigidTransform3D, calculateRMSE
 import PyKDL
 from dvrk import psm
+
+from IPython import embed
 
 _WINDOW_NAME = "Registration"
 
 def combineImages(imageL, imageR):
-    (rows,cols,channels) = imageL.shape
-    doubleImage = np.zeros((rows,cols*2,channels),np.uint8)
+    (rows,cols) = imageL.shape[0:2]
+    if len(imageL.shape) == 2:
+        shape = (rows, cols*2)
+    elif len(imageL.shape) == 3:
+        shape = (rows, cols*2, imageL.shape[2])
+    doubleImage = np.zeros(shape,np.uint8)
     doubleImage[0:rows,0:cols] = imageL
     doubleImage[0:rows,cols:cols*2] = imageR
     return doubleImage
@@ -28,7 +35,7 @@ def calculate3DPoint(imageL, imageR, camModel):
     (rows,cols,channels) = imageL.shape
     if cols > 60 and rows > 60 :
         maskImageL = mask(imageL)
-        centerL = getCentroid(maskImageL)
+        centerL, radiusL = getCentroid(maskImageL)
 
     # if it doesn't exist, don't do anything
     else:
@@ -37,13 +44,18 @@ def calculate3DPoint(imageL, imageR, camModel):
     (rows,cols,channels) = imageR.shape
     if cols > 60 and rows > 60 :
         maskImageR = mask(imageR)
-        centerR = getCentroid(maskImageR)
+        centerR, radiusR = getCentroid(maskImageR)
     else:
         return None, combineImages(imageL, imageR)
+
     if(centerL != None and centerR != None):
-        point3d = camModel.projectPixelTo3d(centerL,centerL[0] - centerR[0])
+        # disparity = abs(centerL[0] - centerR[0])
+        disparity = centerL[0] - centerR[0]
+        point3d = camModel.projectPixelTo3d(centerL,disparity)
         cv2.circle(imageL, centerL, 2,(0, 255, 0), -1)
         cv2.circle(imageR, centerR, 2,(0, 255, 0), -1)
+        cv2.circle(imageL, centerL, radiusL,(0, 255, 0), 1)
+        cv2.circle(imageR, centerR, radiusR,(0, 255, 0), 1)
 
     if cv2.getTrackbarPos('masked',_WINDOW_NAME) == 0:
         return point3d, combineImages(imageL, imageR)
@@ -85,9 +97,9 @@ def getCentroid(maskImage):
         center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
         # only proceed if the radius meets a minimum size
         if radius > 3:
-            return center
+            return center, int(radius)
     # Otherwise return nonsense
-    return None
+    return None, None
 
 class StereoCameras:
     def __init__(self, imageTopic="image_rect"):
@@ -107,9 +119,9 @@ class StereoCameras:
         self.camModel.fromCameraInfo(msgL,msgR)
         # Set up subscribers for camera images
         topicLeft = rospy.resolve_name("left/" + imageTopic)
-        self.imageSubR = rospy.Subscriber(topicLeft, Image, self.imageCallbackR)
+        self.imageSubL = rospy.Subscriber(topicLeft, Image, self.imageCallbackL)
         topicRight = rospy.resolve_name("right/" + imageTopic)
-        self.imageSubL = rospy.Subscriber(topicRight, Image, self.imageCallbackL)
+        self.imageSubR = rospy.Subscriber(topicRight, Image, self.imageCallbackR)
         # Set up blank image for left camera to update
         self.imageL = None
         self.imageR = None
@@ -130,6 +142,14 @@ class StereoCameras:
 def nothingCB(data):
     pass
 
+def generateRandomPoint(xMinMax, yMinMax, zMinMax):
+    randomPoint = [0, 0, 0]
+    for idx, minMax in enumerate([xMinMax, yMinMax, zMinMax]):
+        r = np.random.random_sample()
+        randomPoint[idx] = r * (minMax[1] - minMax[0]) + minMax[0]
+    return randomPoint
+
+
 def main(psmName):
     rospy.init_node('dvrk_registration', anonymous=True)
     toolOffset = .012 # distance from pinching axle to center of orange nub
@@ -138,7 +158,7 @@ def main(psmName):
     rate = rospy.Rate(15) # 30hz
 
     scriptDirectory = os.path.dirname(os.path.abspath(__file__))
-    filePath = os.path.join(scriptDirectory,'..','defaults','registration_params.yaml')
+    filePath = os.path.join(scriptDirectory,'..','..','defaults','registration_params.yaml')
     print(filePath)
     with open(filePath, 'r') as f:
         data = yaml.load(f)
@@ -183,13 +203,21 @@ def main(psmName):
         elif chr(key%256) == 's' or chr(key%256) == 'S':
             break # s to continue
         rate.sleep()
-
+    np.random.seed(1)
+    
     # Main registration
-    points = np.array([[ 0.00, 0.00,-0.10],
-                       [ 0.08, 0.08,-0.15], 
-                       [-0.08, 0.08,-0.10], 
-                       [ 0.00, 0.00,-0.15], 
-                       [ 0.00,-0.05,-0.10]])
+    # points = np.array([[ 0.00, 0.00,-0.10],
+    #                    [ 0.08, 0.08,-0.15], 
+    #                    [-0.08, 0.08,-0.10], 
+    #                    [ 0.00, 0.00,-0.15], 
+    #                    [ 0.00,-0.05,-0.10]])
+
+    points = np.array([[ 0.10, 0.00,-0.15],
+                       [ 0.05, 0.10,-0.18], 
+                       [-0.04, 0.13,-0.15], 
+                       [ 0.05, 0.05,-0.18], 
+                       [-0.05,-0.02,-0.15]])
+    print points
     pointsCam = np.empty(points.shape)
     for i, point in enumerate(points):
         if rospy.is_shutdown():
@@ -225,9 +253,12 @@ def main(psmName):
                                                           pointsCam[i,0],
                                                           pointsCam[i,1],
                                                           pointsCam[i,2]))
+    
+    (rot, pos) = rigidTransform3D(np.mat(pointsCam), np.mat(points))
+    calculateRMSE(np.mat(pointsCam), np.mat(points), rot, pos)
 
-    retval, out, inliers = cv2.estimateAffine3D(pointsCam, points)
-
+    # retval, out, inliers = cv2.estimateAffine3D(pointsCam, points)
+    out = np.hstack((rot,pos))
     transform = np.matrix(np.vstack((out,[0, 0, 0, 1])))
 
     # Save all parameters to YAML file
@@ -268,6 +299,8 @@ def main(psmName):
         # Draw images and display them
         cv2.circle(imageL, tuple(posL), 2,(255, 255, 0), -1)
         cv2.circle(imageR, tuple(posR), 2,(255, 255, 0), -1)
+        cv2.circle(imageL, tuple(posL), 7,(255, 255, 0), 2)
+        cv2.circle(imageR, tuple(posR), 7,(255, 255, 0), 2)
         image = combineImages(imageL, imageR)
         cv2.imshow(_WINDOW_NAME, image)
         key = cv2.waitKey(1)

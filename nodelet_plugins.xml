@@ -1,0 +1,18 @@
+<library path="lib/libdvrk_vision">
+
+  <class name="dvrk_vision/rectify"
+	 type="dvrk_vision::RectifyNodelet"
+	 base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet to rectify an unrectified camera image stream.
+    </description>
+  </class>
+  <class name="dvrk_vision/point_cloud2"
+	 type="dvrk_vision::PointCloud2Nodelet"
+	 base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet to calculate point cloud from disparity.
+    </description>
+  </class>
+
+</library>

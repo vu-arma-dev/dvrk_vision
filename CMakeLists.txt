@@ -72,10 +72,10 @@ catkin_python_setup()
 # )
 
 # Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  Register.srv
-)
+# add_service_files(
+#   FILES
+#   Register.srv
+# )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -152,9 +152,9 @@ include_directories(
 
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
-  src/rectify.cpp
+  # src/rectify.cpp
   src/point_cloud2.cpp
-  src/window_thread.cpp
+  # src/window_thread.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
@@ -168,13 +168,9 @@ target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${O
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # Standalone node
-add_executable(stereo_proc_exe src/stereo_proc.cpp)
-target_link_libraries(stereo_proc_exe ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
-SET_TARGET_PROPERTIES(stereo_proc_exe PROPERTIES OUTPUT_NAME stereo_proc)
-
-add_executable(stereo_viewer_exe src/stereo_viewer.cpp)
-target_link_libraries(stereo_viewer_exe ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
-SET_TARGET_PROPERTIES(stereo_viewer_exe PROPERTIES OUTPUT_NAME stereo_viewer)
+# add_executable(stereo_proc_exe src/stereo_proc.cpp)
+# target_link_libraries(stereo_proc_exe ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+# SET_TARGET_PROPERTIES(stereo_proc_exe PROPERTIES OUTPUT_NAME stereo_proc)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

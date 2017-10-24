@@ -8,13 +8,14 @@ import rospkg
 import cv2
 # Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
-    import PyQt5.QtWidgets as QtGui
-    import PyQt5.uic as uic
+    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication
+    from PyQt5 import uic
     from PyQt5.QtCore import QThread
     _QT_VERSION = 5
     from QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 else:
-    from PyQt4 import QtGui, uic
+    from PyQt4.QtGui import QWidget, QVBoxLayout, QApplication
+    from PyQt4 import uic
     from PyQt4.QtCore import QThread
     _QT_VERSION = 4
     from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -30,42 +31,6 @@ from IPython import embed
 
 functionPath = os.path.dirname(os.path.realpath(__file__))
 
-class RosThread(QThread):
-    # Qt thread designed to allow ROS to run in the background
-    def __init__(self, parent = None):
-        QThread.__init__(self, parent)
-        # Initialize the node
-        if rospy.get_node_uri() == None:
-            rospy.init_node("vtk_test")
-        self.rate = rospy.Rate(30) # 30hz
-    def run(self):
-        while not rospy.is_shutdown():
-            self.update()
-            self.rate.sleep()
-    def update(self):
-        pass
-
-class vtkTimerCallback():
-   # Callback that renders on a timer
-   def __init__(self):
-       self.timer_count = 0
-   def execute(self,obj,event):
-       obj.GetRenderWindow().Render()
-
-def vtkCameraFromCamInfo(camInfo):
-    # Get intrinsic matrix of rectified image
-    intrinsicMatrix = np.reshape(camInfo.P,(3,4))[0:3,0:3]
-    # Get camera extrinsic matrix
-    extrinsicMatrix = np.identity(4)
-    # Get extrinsic rotation
-    extrinsicMatrix [0:3,0:3] = np.reshape(camInfo.R,(3,3))
-    # Get baseline translation (will usually be zero as this is for left camera)
-    xBaseline = camInfo.P[3] / -camInfo.P[0]
-    yBaseline = camInfo.P[7] / -camInfo.P[5]
-    extrinsicMatrix [0:3,3] = [xBaseline, yBaseline, 0]
-
-    return intrinsicMatrix, extrinsicMatrix
-
 def cleanResourcePath(path):
     newPath = path
     if path.find("package://") == 0:
@@ -73,15 +38,15 @@ def cleanResourcePath(path):
         pos = newPath.find("/")
         if pos == -1:
             rospy.logfatal("%s Could not parse package:// format", path)
-            quit(1)
 
         package = newPath[0:pos]
         newPath = newPath[pos:]
         package_path = rospkg.RosPack().get_path(package)
 
         if package_path == "":
-            rospy.logfatal("%s Package [%s] does not exist",path.c_str(), package.c_str());
-            quit(1)
+            rospy.logfatal("%s Package [%s] does not exist",
+                           path.c_str(),
+                           package.c_str());
 
         newPath = package_path + newPath;
     elif path.find("file://") == 0:
@@ -89,14 +54,13 @@ def cleanResourcePath(path):
 
     if not os.path.isfile(newPath):
         rospy.logfatal("%s file does not exist", newPath)
-        quit(1)
     return newPath;
 
-class RegistrationWindow(QtGui.QWidget):
+class RegistrationWidget(QWidget):
 
     def __init__(self, meshPath, scale=1, namespace="/stereo", parentWindow=None):
 
-        super(RegistrationWindow, self).__init__()
+        super(RegistrationWidget, self).__init__()
         uic.loadUi(functionPath + "/registration_gui.ui", self)
 
         # Check whether this is the left (primary) or the right (secondary) window
@@ -118,7 +82,7 @@ class RegistrationWindow(QtGui.QWidget):
             self.segmentation = parentWindow.segmentation
 
         # Add vtk widget
-        self.vl = QtGui.QVBoxLayout()
+        self.vl = QVBoxLayout()
         self.vtkWidget = QVTKRenderWindowInteractor(self.vtkFrame)
         self.vl.addWidget(self.vtkWidget)
         self.vtkFrame.setLayout(self.vl)
@@ -126,9 +90,12 @@ class RegistrationWindow(QtGui.QWidget):
         # Set up vtk camera using camera info
         self.bgImage = vtktools.makeVtkImage(image.shape[0:2])
         self.renWin = self.vtkWidget.GetRenderWindow()
-        camInfo = rospy.wait_for_message(namespace + "/" + side + "/camera_info", CameraInfo, timeout=2)
-        intrinsicMatrix, extrinsicMatrix = vtkCameraFromCamInfo(camInfo)
-        self.ren, self.bgRen = vtktools.setupRenWinForRegistration(self.renWin, self.bgImage,intrinsicMatrix)
+        camInfo = rospy.wait_for_message(namespace + "/" + side + "/camera_info",
+                                         CameraInfo, timeout=2)
+        intrinsicMatrix, extrinsicMatrix = vtktools.matrixFromCamInfo(camInfo)
+        self.ren, self.bgRen = vtktools.setupRenWinForRegistration(self.renWin,
+                                                                   self.bgImage,
+                                                                   intrinsicMatrix)
         pos = extrinsicMatrix[0:3,3]
         self.ren.GetActiveCamera().SetPosition(pos)
         pos[2] = 1
@@ -189,13 +156,18 @@ class RegistrationWindow(QtGui.QWidget):
         self.iren.AddObserver('MouseMoveEvent', self.mouseMoveEvent, 1.0)
         self.iren.RemoveObservers('MiddleButtonPressEvent')
         self.iren.RemoveObservers('MiddleButtonPressEvent')
-        
+        self.iren.RemoveObservers('MouseWheelForwardEvent')
+        self.iren.RemoveObservers('MouseWheelBackwardEvent')
         self.show()
         self.iren.Initialize()
-        # Set up timer to refresh render
-        cb = vtkTimerCallback()
-        self.iren.AddObserver('TimerEvent', cb.execute)
-        timerId = self.iren.CreateRepeatingTimer(30);
+        if self.isPrimaryWindow:
+            # Set up timer to refresh render if this is primary window
+            self.cb = vtktools.vtkTimerCallback(self.renWin)
+            self.iren.AddObserver('TimerEvent', self.cb.execute)
+            timerId = self.iren.CreateRepeatingTimer(30);
+        else:
+            # Otherwise piggyback off of primary window callback
+            parentWindow.cb.addRenWin(self.renWin)
 
         self.iren.Start()
 
@@ -269,17 +241,17 @@ class RegistrationWindow(QtGui.QWidget):
         self.resetPub.publish(True)
 
     def stop(self):
-        self.active = False
+        self.active = not self.active
         self.activePub.publish(self.active)
 
 if __name__ == "__main__":
-    app = QtGui.QApplication(sys.argv)
+    app = QApplication(sys.argv)
 
     # RosThread.update = self.update
-    rosThread = RosThread()
+    rosThread = vtktools.RosQThread()
     meshPath = rospy.get_param("~mesh_path")
     stlScale = rospy.get_param("~mesh_scale")
-    windowL = RegistrationWindow(meshPath, scale=stlScale)
-    windowR = RegistrationWindow(meshPath, scale=stlScale, parentWindow=windowL)
+    windowL = RegistrationWidget(meshPath, scale=stlScale)
+    windowR = RegistrationWidget(meshPath, scale=stlScale, parentWindow=windowL)
     rosThread.start()
     sys.exit(app.exec_())

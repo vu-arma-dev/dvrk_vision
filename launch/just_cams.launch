@@ -5,7 +5,16 @@
 
   <arg name="compressed" default="false"/>
   <arg name="format" value="YUYV"/>
-<!--   <arg name="format" default="jpeg"/> -->
+
+<!--   <arg name="width" default="640" />
+  <arg name="height" default="400" />
+  <arg name="fps" default="15" />
+
+  <arg name="compressed" default="false"/>
+  <arg name="format" value="YUYV"/> -->
+
+  <arg name="world_frame" default="world"/>
+  <arg name="transform_yaml" default=""/>
 
   <arg name="camera_info_url_left" default="file://$(find dvrk_vision)/defaults/stereo_cam0_calibration_$(arg width)x$(arg height).yaml" />
   <arg name="camera_info_url_right" default="file://$(find dvrk_vision)/defaults/stereo_cam1_calibration_$(arg width)x$(arg height).yaml" />
@@ -14,7 +23,6 @@
   <arg name="device_left" default="/dev/video0" />
   <arg name="output_topic_left" default="image_raw" />
 
-  <arg name="frame_right" default="stereo_right_frame" />
   <arg name="device_right" default="/dev/video1" />
   <arg name="output_topic_right" default="image_raw" />
   <arg name="exposure" default="300" />
@@ -64,6 +72,10 @@
   </group>
   
   <!-- Camera transform publisher -->
-  <node pkg="tf" type="static_transform_publisher" name="cam_tf_publisher" args="0.0 0.0 0.32 1.0 0.0 0.0 0.0 world $(arg frame) 100"/>
+  <node pkg="dvrk_vision" type="camera_transform_pub.py" name="cam_tf_publisher">
+    <param name="world_frame" value="$(arg world_frame)"/>
+    <param name="child_frame" value="$(arg frame)"/>
+    <param name="transform_yaml" value="$(arg transform_yaml)"/>
+  </node>
 
 </launch>

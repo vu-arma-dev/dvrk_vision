@@ -17,7 +17,6 @@ sudo rmmod uvcvideo
 sudo modprobe uvcvideo quirks=128
 
 // FOR CONFIGURING STEREO
-rosrun image_view stereo_view _approximate_sync:=True image:=image_rect_color
 rosrun rqt_reconfigure rqt_reconfigure
 // FOR SAVING STEREO CONFIG
 rosrun dynamic_reconfigure dynparam dump /stereo/stereo_image_proc /home/biomed/daVinci/catkin_ws/src/dvrk-vtk-registration/defaults/stereo_processing.yaml 
