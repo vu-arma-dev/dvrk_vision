@@ -206,12 +206,6 @@ def main(psmName):
     np.random.seed(1)
     
     # Main registration
-    # points = np.array([[ 0.00, 0.00,-0.10],
-    #                    [ 0.08, 0.08,-0.15], 
-    #                    [-0.08, 0.08,-0.10], 
-    #                    [ 0.00, 0.00,-0.15], 
-    #                    [ 0.00,-0.05,-0.10]])
-
     points = np.array([[ 0.10, 0.00,-0.15],
                        [ 0.05, 0.10,-0.18], 
                        [-0.04, 0.13,-0.15], 
@@ -227,11 +221,10 @@ def main(psmName):
             quit()
         rospy.sleep(.1)
         pBuffer = deque([], 50)
+        rBuffer = deque([], 50)
         zVector = robot.get_current_position().M.UnitZ()
-        pVector = robot.get_current_position().p
         offset = np.array([zVector.x(), zVector.y(), zVector.z()])
         offset = offset * toolOffset
-        points[i,:] = np.array([pVector.x(), pVector.y(), pVector.z()]) + offset
         startTime = rospy.get_time()
 
         while rospy.get_time() - startTime < 1:
@@ -248,7 +241,11 @@ def main(psmName):
             rate.sleep()
             if point3d != None:
                 pBuffer.append(point3d)
+                pVector = robot.get_current_position().p
+                rBuffer.append(np.array([pVector.x(), pVector.y(), pVector.z()]) + offset)
+                
         pointsCam[i,:] = np.median(pBuffer,0)
+        points[i,:] = np.median(rBuffer,0)
         print("Using median of %d values: (%f, %f, %f)" % (len(pBuffer),
                                                           pointsCam[i,0],
                                                           pointsCam[i,1],
