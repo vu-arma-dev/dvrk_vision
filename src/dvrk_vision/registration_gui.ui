@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>993</width>
+    <width>744</width>
     <height>576</height>
    </rect>
   </property>
@@ -14,7 +14,16 @@
    <string>Registration Window</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <property name="spacing">
@@ -94,6 +103,13 @@
          </property>
          <property name="text">
           <string>Stop Registration</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="renderMaskCheckBox">
+         <property name="text">
+          <string>Use rendered mask</string>
          </property>
         </widget>
        </item>

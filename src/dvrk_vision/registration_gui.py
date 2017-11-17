@@ -29,8 +29,6 @@ from tf import transformations
 
 from IPython import embed
 
-functionPath = os.path.dirname(os.path.realpath(__file__))
-
 def cleanResourcePath(path):
     newPath = path
     if path.find("package://") == 0:
@@ -61,18 +59,21 @@ class RegistrationWidget(QWidget):
     def __init__(self, meshPath, scale=1, namespace="/stereo", parentWindow=None):
 
         super(RegistrationWidget, self).__init__()
+        functionPath = os.path.dirname(os.path.realpath(__file__))
         uic.loadUi(functionPath + "/registration_gui.ui", self)
 
         # Check whether this is the left (primary) or the right (secondary) window
         self.isPrimaryWindow = parentWindow == None
         side = "left" if self.isPrimaryWindow else "right"
 
-        # Set up subscriber for camera image
-        self.bridge = CvBridge()
-        imgSubTopic = namespace + "/"+side+"/image_rect"
-        imageSub = rospy.Subscriber(imgSubTopic, Image, self.imageCallback)
+        if self.isPrimaryWindow:
+            # Set up publisher for masking
+            pubTopic = namespace + "/disparity_mask"
+            self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=1)
         
         # Set up vtk background image
+        self.bridge = CvBridge()
+        imgSubTopic = namespace + "/"+side+"/image_rect"
         msg = rospy.wait_for_message(imgSubTopic, Image)
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         if self.isPrimaryWindow:
@@ -100,7 +101,6 @@ class RegistrationWidget(QWidget):
         self.ren.GetActiveCamera().SetPosition(pos)
         pos[2] = 1
         self.ren.GetActiveCamera().SetFocalPoint(pos)
-        self.zBuff = vtktools.zBuff(self.renWin)
 
         # Set up 3D actor for organ
         meshPath = cleanResourcePath(meshPath)
@@ -120,7 +120,7 @@ class RegistrationWidget(QWidget):
         transformFilter.SetInputConnection(meshReader.GetOutputPort())
         transformFilter.Update()
         self.actor_moving = vtk.vtkActor()
-        self.actor_moving.GetProperty().SetOpacity(0.35)
+        self.actor_moving.GetProperty().SetOpacity(1)
         self._updateActorPolydata(self.actor_moving,
                                   polydata=transformFilter.GetOutput(),
                                   color=(0,1, 0))
@@ -132,11 +132,6 @@ class RegistrationWidget(QWidget):
         poseSubTopic = namespace + "/registration_marker"
         poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
 
-        if self.isPrimaryWindow:
-            # Set up publisher for masking
-            pubTopic = namespace + "/disparity_mask"
-            self.maskPub = rospy.Publisher(pubTopic, Image, queue_size=1)
-
         # Set up registration button
         pubTopic = namespace + "/registration/reset"
         self.resetPub = rospy.Publisher(pubTopic, Bool, queue_size=1)
@@ -145,6 +140,14 @@ class RegistrationWidget(QWidget):
         self.activePub = rospy.Publisher(pubTopic, Bool, queue_size=1)
         self.registerButton.clicked.connect(self.register)
         self.stopButton.clicked.connect(self.stop)
+
+        self.otherWindows = []
+        if not self.isPrimaryWindow:
+            parentWindow.otherWindows.append(self)
+            self.otherWindows.append(parentWindow) 
+
+        # Set up checkbox
+        self.renderMaskCheckBox.stateChanged.connect(self.checkBoxChanged)
 
         # Setup interactor
         self.iren = self.renWin.GetInteractor()
@@ -167,16 +170,52 @@ class RegistrationWidget(QWidget):
             timerId = self.iren.CreateRepeatingTimer(30);
         else:
             # Otherwise piggyback off of primary window callback
-            parentWindow.cb.addRenWin(self.renWin)
+            parentWindow.cb.addRenWin(self.renWin) 
 
+        self.zRen = vtk.vtkRenderer()
+        self.zRenWin = vtk.vtkRenderWindow()
+        self.zRenWin.AddRenderer(self.zRen)
+        self.zRenWin.SetOffScreenRendering(1)
+
+        imgDims = self.bgImage.GetDimensions()
+        self.zRenWin.SetSize(imgDims[0],imgDims[1])
+
+        self.zRen.SetActiveCamera(self.ren.GetActiveCamera())
+        self.zRen.AddActor(self.actor_moving)
+
+        self.zBuff = vtktools.zBuff(self.zRenWin)
+
+        # Set up publisher for rendered image
+        renWinTopic = namespace + '/registration_render'
+
+        self.zRenWin.Render()
+
+        self.renWinFilter = vtk.vtkWindowToImageFilter()
+        self.renWinFilter.SetInput(self.zRenWin)
+        self.renWinFilter.SetMagnification(1)
+        self.renWinFilter.Update()
+        self.renWinPub = rospy.Publisher(renWinTopic, Image, queue_size = 1)
+
+        # Set up subscriber for camera image
+        imageSub = rospy.Subscriber(imgSubTopic, Image, self.imageCallback)
+        
         self.iren.Start()
 
+    def checkBoxChanged(self):
+        self.renderMaskCheckBox.isChecked()
+        for window in self.otherWindows:
+            window.renderMaskCheckBox.setChecked(self.renderMaskCheckBox.isChecked())
+
     def leftButtonPressEvent(self,obj,event):
+        if self.renderMaskCheckBox.isChecked():
+            return
         event = cv2.EVENT_LBUTTONDOWN
         (x,y) = self.getMousePos()
         self.segmentation.onMouse(event,x,y,0,0)
 
     def leftButtonReleaseEvent(self,obj,event):
+        if self.renderMaskCheckBox.isChecked():
+            return
         event = cv2.EVENT_LBUTTONUP
         (x,y) = self.getMousePos()
         self.segmentation.onMouse(event,x,y,0,0)
@@ -198,16 +237,25 @@ class RegistrationWidget(QWidget):
 
     def imageCallback(self, data):
         # TODO no try catch
-        try:
-            image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            if self.isPrimaryWindow:
-                self.segmentation.setImage(image)
-                vtktools.numpyToVtkImage(self.segmentation.getMaskedImage(),self.bgImage)
-                self.maskPub.publish(self.bridge.cv2_to_imgmsg(self.segmentation.mask*255, "mono8"))
-            else:
-                vtktools.numpyToVtkImage(image,self.bgImage)
-        except:
-            pass
+        # try:
+        image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        if self.isPrimaryWindow:
+            self.segmentation.setImage(image)
+            if self.renderMaskCheckBox.isChecked():
+                self.zRen.ResetCameraClippingRange()
+                mask = vtktools.vtkImageToNumpy(self.zBuff.GetOutput())
+                mask = np.where(mask<5,0,1).astype('uint8')
+                self.segmentation.mask = mask[:,:,0]
+            vtktools.numpyToVtkImage(self.segmentation.getMaskedImage(),self.bgImage)
+            self.maskPub.publish(self.bridge.cv2_to_imgmsg(self.segmentation.mask*255, "mono8"))
+            self.renWinFilter.Modified()
+            self.renWinFilter.Update()
+            render = vtktools.vtkImageToNumpy(self.renWinFilter.GetOutput())
+            self.renWinPub.publish(self.bridge.cv2_to_imgmsg(render, "rgb8"))
+        else:
+            vtktools.numpyToVtkImage(image,self.bgImage)
+        # except Exception as e:
+        #     print("Error in registration window image callback:", e)
 
     def poseCallback(self, data):
         pos = data.pose.position

@@ -151,8 +151,11 @@ class vtkTimerCallback():
     def execute(self,obj,event):
         for renWin in self.renderWindows:
             renWin.Render()
+        self.update()
     def addRenWin(self,renWin):
         self.renderWindows.append(renWin)
+    def update(self):
+        pass
 
 
 def matrixFromCamInfo(camInfo):
@@ -174,13 +177,14 @@ class zBuff:
         self.renWin = renWin
         self.zBuffFilter = vtk.vtkWindowToImageFilter()
         self.zBuffFilter.SetInput(self.renWin)
+        self.zBuffFilter.SetMagnification(1)
         self.zBuffFilter.SetInputBufferTypeToZBuffer()
 
         self.scaledZBuff = vtk.vtkImageShiftScale()
         self.scaledZBuff.SetOutputScalarTypeToUnsignedChar()
         self.scaledZBuff.SetInputConnection(self.zBuffFilter.GetOutputPort())
         self.scaledZBuff.SetShift(0)
-        self.scaledZBuff.SetScale(255)
+        self.scaledZBuff.SetScale(-255)
 
     def GetOutput(self):
         self.renWin.Render()

@@ -76,6 +76,9 @@ class SegmentedImage:
                 self.mask = np.zeros(self.mask.shape, np.uint8)
                 cv2.rectangle(self.mask, cropA,cropB, 1, -1)
 
+    def setMask(self, mask):
+        self.mask = np.where(mask>5,0,1).astype('uint8')
+
     def setImage(self, image):
         self.image = image
         shape = (self.image.shape[0],self.image.shape[1])
