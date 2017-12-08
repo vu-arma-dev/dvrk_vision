@@ -14,7 +14,6 @@ def arrayToPyKDLFrame(array):
     return PyKDL.Frame(rot,pos)
 
 def arrayToPyKDLRotation(array):
-    print array
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])
     y = PyKDL.Vector(array[0][1], array[1][1], array[2][1])
     z = PyKDL.Vector(array[0][2], array[1][2], array[2][2])
