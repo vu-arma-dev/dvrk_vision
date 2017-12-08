@@ -13,7 +13,6 @@ from cv_bridge import CvBridge, CvBridgeError
 from rigid_transform_3d import rigidTransform3D, calculateRMSE
 import PyKDL
 from dvrk import psm
-
 from IPython import embed
 
 _WINDOW_NAME = "Registration"

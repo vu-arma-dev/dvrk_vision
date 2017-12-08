@@ -110,7 +110,7 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     renWin.AddRenderer(ren)
     imgDims = bgImage.GetDimensions()
     renWin.SetSize(imgDims[1],imgDims[0])
-    camera = _cameraFromMatrix(camIntrinsic,imgDims,imgDims)
+    camera = cameraFromMatrix(camIntrinsic,imgDims,imgDims)
     ren.SetActiveCamera(camera)
 
     # Create background renderer for static object
@@ -136,7 +136,7 @@ class RosQThread(QThread):
         # Initialize the node
         if rospy.get_node_uri() == None:
             rospy.init_node("vtk_test")
-        self.rate = rospy.Rate(30) # 30hz
+        self.rate = rospy.Rate(24) # 24hz
     def run(self):
         while not rospy.is_shutdown():
             self.update()
@@ -187,7 +187,7 @@ class zBuff:
         self.scaledZBuff.SetScale(-255)
 
     def GetOutput(self):
-        self.renWin.Render()
+        # self.renWin.Render()
         self.zBuffFilter.Modified()
         self.scaledZBuff.Update()
         return self.scaledZBuff.GetOutput()
@@ -235,7 +235,7 @@ def _setCameraExtrinsic(camera,matrix):
     return
 
 # Sets up a camera based on a camera intrinsics matrix from OpenCV
-def _cameraFromMatrix(camMatrix, imageDims, windowDims) :
+def cameraFromMatrix(camMatrix, imageDims, windowDims) :
     ''' Takes a camera matrix derived from OpenCV
         returns a camera for registration
         http://stackoverflow.com/questions/25539898/how-to-apply-the-camera-pose-transformation-computed-using-epnp-to-the-vtk-camer
