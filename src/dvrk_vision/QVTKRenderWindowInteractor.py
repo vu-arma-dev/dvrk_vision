@@ -474,8 +474,7 @@ class QVTKRenderWindowInteractor(QVTKRWIBaseClass):
         return self._RenderWindow
 
     def Render(self):
-        if self.isVisible():
-            self.update()
+        self.update()
 
 
 def QVTKRenderWidgetConeExample():
