@@ -6,14 +6,13 @@ import rospy
 import cv2
 import numpy as np
 from collections import deque
-from image_geometry import StereoCameraModel
-from sensor_msgs.msg import Image
-from sensor_msgs.msg import CameraInfo
-from cv_bridge import CvBridge, CvBridgeError
 from rigid_transform_3d import rigidTransform3D, calculateRMSE
 import PyKDL
 from dvrk import psm
 from IPython import embed
+from dvrk_vision.vtk_stereo_viewer import StereoCameras
+from image_geometry import StereoCameraModel
+from sensor_msgs.msg import CameraInfo
 
 _WINDOW_NAME = "Registration"
 
@@ -100,44 +99,6 @@ def getCentroid(maskImage):
     # Otherwise return nonsense
     return None, None
 
-class StereoCameras:
-    def __init__(self, imageTopic="image_rect"):
-        ns = rospy.get_namespace()
-        print(ns)
-        if ns == "/":
-            rospy.logwarn("Node started in default namespace.\n\t"+
-                          "This is probably a mistake.\n\t" +
-                          "This node's namespace should look something like /stereo/");
-        self.bridge = CvBridge()
-        # Create camera model for calculating 3d position
-        self.camModel = StereoCameraModel()
-        topicLeft = rospy.resolve_name("left/camera_info")
-        msgL = rospy.wait_for_message(topicLeft,CameraInfo,3);
-        topicRight = rospy.resolve_name("right/camera_info")
-        msgR = rospy.wait_for_message(topicRight,CameraInfo,3);
-        self.camModel.fromCameraInfo(msgL,msgR)
-        # Set up subscribers for camera images
-        topicLeft = rospy.resolve_name("left/" + imageTopic)
-        self.imageSubL = rospy.Subscriber(topicLeft, Image, self.imageCallbackL)
-        topicRight = rospy.resolve_name("right/" + imageTopic)
-        self.imageSubR = rospy.Subscriber(topicRight, Image, self.imageCallbackR)
-        # Set up blank image for left camera to update
-        self.imageL = None
-        self.imageR = None
-
-    def imageCallbackL(self,data):
-        try:
-            self.imageL = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print e
-
-    def imageCallbackR(self,data):
-        try:
-            self.imageR = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print e
-
-
 def nothingCB(data):
     pass
 
@@ -148,14 +109,12 @@ def generateRandomPoint(xMinMax, yMinMax, zMinMax):
         randomPoint[idx] = r * (minMax[1] - minMax[0]) + minMax[0]
     return randomPoint
 
-
 def main(psmName):
     rospy.init_node('dvrk_registration', anonymous=True)
     toolOffset = .012 # distance from pinching axle to center of orange nub
 
     robot = psm(psmName)
     rate = rospy.Rate(15) # 30hz
-
     scriptDirectory = os.path.dirname(os.path.abspath(__file__))
     filePath = os.path.join(scriptDirectory,'..','..','defaults','registration_params.yaml')
     print(filePath)
@@ -164,7 +123,21 @@ def main(psmName):
     if 'H' not in data:
         rospy.logwarn('dVRK Registration: defaults/registration_params.yaml empty or malformed. Using defaults for orange tip')
         data = {'H': 23, 'minS': 173, 'minV': 68, 'maxV': 255, 'transform':np.eye(4).tolist()}
-    cams = StereoCameras()
+    
+    frameRate = 15
+    slop = 1.0 / frameRate
+    cams = StereoCameras( "left/image_rect",
+                          "right/image_rect",
+                          "left/camera_info",
+                          "right/camera_info",
+                          slop = slop)
+
+    camModel = StereoCameraModel()
+    topicLeft = rospy.resolve_name("left/camera_info")
+    msgL = rospy.wait_for_message(topicLeft,CameraInfo,3);
+    topicRight = rospy.resolve_name("right/camera_info")
+    msgR = rospy.wait_for_message(topicRight,CameraInfo,3);
+    camModel.fromCameraInfo(msgL,msgR)
 
     # Set up GUI
     cv2.namedWindow(_WINDOW_NAME)
@@ -177,8 +150,8 @@ def main(psmName):
     # Wait for registration to begin
     while not rospy.is_shutdown():
         # Get last images
-        imageR = cams.imageR
-        imageL = cams.imageL
+        imageR = cams.camL.image
+        imageL = cams.camR.image
 
         # Wait for images to exist
         if type(imageR) == type(None) or type(imageL) == type(None):
@@ -189,14 +162,14 @@ def main(psmName):
         if cols < 60 or rows < 60 or imageL.shape != imageR.shape:
             continue
 
-        point3d, image = calculate3DPoint(imageL, imageR, cams.camModel)
+        point3d, image = calculate3DPoint(imageL, imageR, camModel)
         message = "Press s to start registration. Robot will move to its joint limits."
         cv2.putText(image, message, (50,50), cv2.FONT_HERSHEY_DUPLEX, 1, [0, 0, 255])
         message = "MAKE SURE AREA IS CLEAR"
         cv2.putText(image, message, (50,100), cv2.FONT_HERSHEY_DUPLEX, 1, [0, 0, 255])
         cv2.imshow(_WINDOW_NAME, image)
         key = cv2.waitKey(1)
-        if key == 27 or key == -1:
+        if key == 27:
             cv2.destroyAllWindows() 
             quit()  # esc to quit
         elif chr(key%256) == 's' or chr(key%256) == 'S':
@@ -228,13 +201,14 @@ def main(psmName):
 
         while rospy.get_time() - startTime < 1:
             # Get last images
-            imageR = cams.imageR
-            imageL = cams.imageL
-            point3d, image = calculate3DPoint(imageL, imageR, cams.camModel)
+            imageR = cams.camL.image
+            imageL = cams.camR.image
+
+            point3d, image = calculate3DPoint(imageL, imageR, camModel)
             if type(image) != type(None):
                 cv2.imshow(_WINDOW_NAME, image)
                 key = cv2.waitKey(1)
-                if key == 27 or key == -1: 
+                if key == 27: 
                     cv2.destroyAllWindows()
                     quit()
             rate.sleep()
@@ -265,12 +239,17 @@ def main(psmName):
     data['maxV'] = cv2.getTrackbarPos('max V',_WINDOW_NAME)
     with open(filePath, 'w') as f:
         yaml.dump(data,f)
-    
+
     # Evaluate registration
     while not rospy.is_shutdown():
         # Get last images
-        imageR = cams.imageR
-        imageL = cams.imageL
+        imageR = cams.camL.image
+        imageL = cams.camR.image
+
+        # Wait for images to exist
+        if type(imageR) == type(None) or type(imageL) == type(None):
+            continue
+
 
         # Check we have valid images
         (rows,cols,channels) = imageL.shape
@@ -287,9 +266,9 @@ def main(psmName):
         pos = np.linalg.inv(transform) * pos
 
         # Project position into 2d coordinates
-        posL = cams.camModel.left.project3dToPixel(pos)
+        posL = camModel.left.project3dToPixel(pos)
         posL = [int(l) for l in posL]
-        posR = cams.camModel.right.project3dToPixel(pos)
+        posR = camModel.right.project3dToPixel(pos)
         posR = [int(l) for l in posR]
 
         # Draw images and display them
@@ -300,7 +279,7 @@ def main(psmName):
         image = combineImages(imageL, imageR)
         cv2.imshow(_WINDOW_NAME, image)
         key = cv2.waitKey(1)
-        if key == 27 or key == -1: 
+        if key == 27: 
             cv2.destroyAllWindows()
             quit()
         rate.sleep()
