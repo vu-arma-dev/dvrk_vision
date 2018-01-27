@@ -106,9 +106,7 @@ class RegistrationWidget(QWidget):
         # Set up checkbox
         self.renderMaskCheckBox.stateChanged.connect(self.checkBoxChanged)
 
-        self.show()
-        iren = self.vtkWidget.GetRenderWindow().GetInteractor()
-        iren.Initialize()
+        self.vtkWidget.Initialize()
         self.vtkWidget.start()
 
     def renderSetup(self):
@@ -209,8 +207,9 @@ class RegistrationWidget(QWidget):
         if self.renderMaskCheckBox.isChecked():
             self.zRen.ResetCameraClippingRange()
             mask = vtktools.vtkImageToNumpy(self.zBuff.GetOutput())
-            mask = np.where(mask<5,0,1).astype('uint8')
-            self.segmentation.mask = mask[:,:,0]
+            mask = np.where(mask>1,1,0).astype('uint8')
+            kernel = np.ones((5,5),np.uint8)
+            self.segmentation.mask = cv2.dilate(mask[:,:,0], kernel)
         self.maskPub.publish(self.bridge.cv2_to_imgmsg(self.segmentation.mask*255, "mono8"))
         return self.segmentation.getMaskedImage()
 
@@ -250,17 +249,19 @@ class RegistrationWidget(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    rosThread = vtktools.RosQThread()
+    rosThread = vtktools.QRosThread()
     meshPath = rospy.get_param("~mesh_path")
     stlScale = rospy.get_param("~mesh_scale")
     frameRate = 15
     slop = 1.0 / frameRate
-    cams = StereoCameras("left/image_rect",
-                          "right/image_rect",
-                          "left/camera_info",
-                          "right/camera_info",
-                          slop = slop)
+    cams = StereoCameras("/stereo/left/image_rect",
+                         "/stereo/right/image_rect",
+                         "/stereo/left/camera_info",
+                         "/stereo/right/camera_info",
+                         slop = slop)
     windowL = RegistrationWidget(cams.camL, meshPath, scale=stlScale)
+    windowL.show()
     windowR = RegistrationWidget(cams.camR, meshPath, scale=stlScale, masterWidget=windowL)
+    windowR.show()
     rosThread.start()
     sys.exit(app.exec_())
