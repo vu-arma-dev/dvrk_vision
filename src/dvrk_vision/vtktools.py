@@ -109,7 +109,7 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     ren.SetLayer(1)
     renWin.AddRenderer(ren)
     imgDims = bgImage.GetDimensions()
-    renWin.SetSize(imgDims[1],imgDims[0])
+    renWin.SetSize(imgDims[0],imgDims[1])
     camera = cameraFromMatrix(camIntrinsic,imgDims,imgDims)
     ren.SetActiveCamera(camera)
 
@@ -129,7 +129,7 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     # Way of getting camera: renWin.GetRenderers().GetFirstRenderer()
     return ren, backgroundRen
 
-class RosQThread(QThread):
+class QRosThread(QThread):
     # Qt thread designed to allow ROS to run in the background
     def __init__(self, parent = None):
         QThread.__init__(self, parent)
@@ -224,13 +224,12 @@ def _makeImagePlane(imageData) :
 
     return camera, imageActor
 
-def _setCameraExtrinsic(camera,matrix):
-    R = np.linalg.inv(matrix[0:3,0:3])
+def setCameraExtrinsic(camera,matrix):
+    R = matrix[0:3,0:3]
     up = np.dot(R,[0,-1,0])
     forward = np.dot(R,[0,0,1])
     camera.SetViewUp(up)
     camera.SetFocalPoint(forward)
-    print up, forward, np.dot(up,forward)
     # eye = (-R'T), center = eye + R'(0,0,1)', up = -R[0][1]
     return
 
@@ -256,7 +255,6 @@ def cameraFromMatrix(camMatrix, imageDims, windowDims) :
         factor = float(windowDims[1])/float(imageDims[1])
         focalLengthY = camMatrix[1,1] * factor
     viewAngle = np.arctan((windowDims[1]/2.0)/focalLengthY)*360/np.pi
-    print viewAngle
     camera.SetViewAngle(viewAngle)
 
     #Set window center
@@ -282,7 +280,6 @@ def cameraFromMatrix(camMatrix, imageDims, windowDims) :
     windowCenter = [0,0]
     windowCenter[0] = cx / ( (width)/2 ) - 1 
     windowCenter[1] = cy / ( (height)/2 ) - 1
-    print windowCenter
     camera.SetWindowCenter(windowCenter[0],windowCenter[1])
 
     # Set camera to look forward from center
