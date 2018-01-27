@@ -1,13 +1,19 @@
+#!/usr/bin/env python
+import sys
 import cv2
 import vtk
 import vtktools
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
     _QT_VERSION = 5
     from PyQt5.QtCore import QObject, pyqtSignal
+    from PyQt5.QtWidgets import QWidget
     from QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+    from PyQt5.QtWidgets import QApplication
 else:
     _QT_VERSION = 4
     from PyQt4.QtCore import QObject, pyqtSignal
+    from PyQt4.QtWidgets import QWidget
+    from PyQt4.QtWidgets import QApplication
     from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CameraInfo
@@ -55,35 +61,76 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
     def __init__(self, camera, parent=None, **kw):
         super(QVTKStereoViewer, self).__init__(parent, **kw)
         self.cam = camera
+        self.setUp = False
+        self.aspectRatio = 1
+        self.numResizes = 0
 
     def start(self):
-        self.cam.trigger.connect(self.setupWindow)
-
-    def setupWindow(self):
-        image = self.cam.image
-        # Set up vtk camera using camera info
-        self.bgImage = vtktools.makeVtkImage(image.shape[0:2])
-        renWin = self.GetRenderWindow()
-        intrinsicMat, extrinsicMat = vtktools.matrixFromCamInfo(self.cam.info)
-        self.ren, bgRen = vtktools.setupRenWinForRegistration(renWin,
-                                                              self.bgImage,
-                                                              intrinsicMat)
-        renWin.SetSize(self.width(),self.height())
-        pos = extrinsicMat[0:3,3]
-        self.ren.GetActiveCamera().SetPosition(pos)
-        pos[2] = 1
-        self.ren.GetActiveCamera().SetFocalPoint(pos)
-        self.renderSetup()
-        self.cam.trigger.disconnect()
         self.cam.trigger.connect(self.imageCb)
 
     def renderSetup(self):
         pass
 
     def imageCb(self):
-        image = self.imageProc(self.cam.image)
-        vtktools.numpyToVtkImage(image,self.bgImage)
-        self.Render()
+        if not self.setUp:
+            image = self.cam.image
+            self.aspectRatio = image.shape[1] / float(image.shape[0])
+            # self.resize(self.width(), self.height())
+            # Set up vtk camera using camera info
+            self.bgImage = vtktools.makeVtkImage(image.shape[0:2])
+            renWin = self.GetRenderWindow()
+            intrinsicMat, extrinsicMat = vtktools.matrixFromCamInfo(self.cam.info)
+            self.ren, bgRen = vtktools.setupRenWinForRegistration(renWin,
+                                                                  self.bgImage,
+                                                                  intrinsicMat)
+            size = self._RenderWindow.GetSize()
+            self._Iren.SetSize(size)
+            self._Iren.ConfigureEvent()
+            super(QVTKRenderWindowInteractor,self).resize(size[0], size[1])
+            pos = extrinsicMat[0:3,3]
+            self.ren.GetActiveCamera().SetPosition(pos)
+            pos[2] = 1
+            self.ren.GetActiveCamera().SetFocalPoint(pos)
+            self.renderSetup()
+            self.setUp = True
+        if self.isVisible():
+            image = self.imageProc(self.cam.image)
+            self.aspectRatio = image.shape[1] / float(image.shape[0])
+            vtktools.numpyToVtkImage(image,self.bgImage)
+            self.Render()
 
     def imageProc(self, image):
         return image
+
+    def resizeEvent(self, ev):
+        self.numResizes = self.numResizes + 1
+        print self.width(), self.height(), self.numResizes
+        newHeight = int(ev.size().height() * self.aspectRatio)
+        size = min(newHeight, ev.size().width())
+        offset = ((ev.size().width() - size) / 2,
+                  (ev.size().height() - int(size / self.aspectRatio)) / 2)
+        width, height = (size,int(size / self.aspectRatio))
+        QWidget.resize(self, width, height)
+        self._RenderWindow.SetSize(width, height)
+        self._Iren.SetSize(width, height)
+        self._Iren.ConfigureEvent()
+        self.move(offset[0], offset[1])
+        self.update()
+
+if __name__ == "__main__":
+
+    app = QApplication(sys.argv)
+    rosThread = vtktools.QRosThread()
+    rosThread.start()
+    frameRate = 15
+    slop = 1.0 / frameRate
+    cams = StereoCameras("stereo/left/image_rect",
+                         "stereo/right/image_rect",
+                         "stereo/left/camera_info",
+                         "stereo/right/camera_info",
+                         slop = slop)
+    windowL = QVTKStereoViewer(cams.camL)
+    windowL.Initialize()
+    windowL.start()
+    windowL.show()
+    sys.exit(app.exec_())
