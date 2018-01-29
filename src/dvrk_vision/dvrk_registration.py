@@ -150,8 +150,8 @@ def main(psmName):
     # Wait for registration to begin
     while not rospy.is_shutdown():
         # Get last images
-        imageR = cams.camL.image
-        imageL = cams.camR.image
+        imageL = cams.camL.image
+        imageR = cams.camR.image
 
         # Wait for images to exist
         if type(imageR) == type(None) or type(imageL) == type(None):
@@ -201,8 +201,8 @@ def main(psmName):
 
         while rospy.get_time() - startTime < 1:
             # Get last images
-            imageR = cams.camL.image
-            imageL = cams.camR.image
+            imageL = cams.camL.image
+            imageR = cams.camR.image
 
             point3d, image = calculate3DPoint(imageL, imageR, camModel)
             if type(image) != type(None):
@@ -243,8 +243,8 @@ def main(psmName):
     # Evaluate registration
     while not rospy.is_shutdown():
         # Get last images
-        imageR = cams.camL.image
-        imageL = cams.camR.image
+        imageL = cams.camL.image
+        imageR = cams.camR.image
 
         # Wait for images to exist
         if type(imageR) == type(None) or type(imageL) == type(None):
