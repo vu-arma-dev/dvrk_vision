@@ -8,71 +8,20 @@ import rospkg
 import cv2
 # Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
-    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication
-    from PyQt5 import uic
-    _QT_VERSION = 5
+    from PyQt5.QtWidgets import QApplication
 else:
-    from PyQt4.QtGui import QWidget, QVBoxLayout, QApplication
-    from PyQt4 import uic
-    _QT_VERSION = 4
+    from PyQt4.QtGui import QApplication
+
 import dvrk_vision.vtktools as vtktools
-from sensor_msgs.msg import Image, CameraInfo
-from visualization_msgs.msg import Marker
-from cv_bridge import CvBridge, CvBridgeError
-from tf import transformations
+from geometry_msgs.msg import PoseStamped
 from dvrk_vision.vtk_stereo_viewer import StereoCameras, QVTKStereoViewer
 from QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from dvrk import psm
+from force_sensor_gateway.msg import ForceSensorData
 import yaml
 import PyKDL
 from tf_conversions import posemath
 import colorsys
 
-class vtkRosTextureActor(vtk.vtkActor):
-    ''' Attaches texture to the actor. Texture is received by subscribing to a ROS topic and then converted to vtk image
-        Input: vtk.Actor
-        Output: Updates the input actor with the texture
-    '''
-
-    def __init__(self,topic, color = (1,0,0)):
-        self.bridge = CvBridge()
-        self.vtkImage = None
-
-        #Subscriber
-        sub = rospy.Subscriber(topic, Image, self.imageCB, queue_size=1)
-        self.texture = vtk.vtkTexture()
-        self.texture.EdgeClampOff()
-        self.color = color
-        self.textureOnOff(False)
-
-    #Subscriber callback function
-    def imageCB(self, msg):
-        try:
-            # Convert your ROS Image message to OpenCV2
-            cv2_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        except CvBridgeError, e:
-            print(e)
-        else:
-            self.setTexture(cv2_img)
-
-    def setTexture(self, img):
-        if type(self.vtkImage) == type(None):
-            self.vtkImage = vtktools.makeVtkImage(img.shape)
-        vtktools.numpyToVtkImage(img, self.vtkImage)
-        if vtk.VTK_MAJOR_VERSION <= 5:
-            self.texture.SetInput(self.vtkImage)
-        else:
-            self.texture.SetInputData(self.vtkImage)
-
-    def textureOnOff(self, data):
-        if data:
-            self.SetTexture(self.texture)
-            self.GetProperty().SetColor(1, 1, 1)
-            self.GetProperty().LightingOff()
-        else:
-            self.SetTexture(None)
-            self.GetProperty().SetColor(self.color)
-            self.GetProperty().LightingOn()
 
 def cleanResourcePath(path):
     newPath = path
@@ -126,13 +75,29 @@ class OverlayWidget(QVTKStereoViewer):
     def __init__(self, camera, dvrkName, cameraTransform, masterWidget=None, parent=None):
         super(OverlayWidget, self).__init__(camera, parent=parent)
         self.masterWidget = masterWidget
-        if self.masterWidget == None:
-            self.robot = psm(dvrkName)
-        else:
-            self.robot = self.masterWidget.robot
         self.cameraTransform = cameraTransform
         self.drawType = "arrow"
-        # self.drawType = "bar"
+
+        self.force = None
+        self.pose = None
+        self.forceSub = rospy.Subscriber('/force_sensor_topic',
+                                     ForceSensorData, self.forceCb)
+        self.pose = None
+        self.poseSub = rospy.Subscriber('/dvrk/PSM2/position_cartesian_current',
+                                        PoseStamped, self.poseCb)
+
+        if self.masterWidget == None:
+            pass
+        else:
+            pass
+
+    def forceCb(self, data):
+        force = np.array([data.data1, data.data2, data.data3, data.data4], np.float32) / 30.0
+        force[force < 0] = 0
+        self.force = force
+
+    def poseCb(self, data):
+        self.pose = posemath.fromMsg(data.pose)
 
     def renderSetup(self):
         if self.drawType == "arrow":
@@ -191,11 +156,14 @@ class OverlayWidget(QVTKStereoViewer):
         self.iren.RemoveObservers('MiddleButtonPressEvent')
     
     def imageProc(self,image):
-        # Get current force
-        force = self.robot.get_current_wrench_body()[0:3]
+        if type(self.force) != type(None):
+            # Get current force
+            force = self.force # self.robot.get_current_wrench_body()[0:3]
+        else :
+            force = [0,0,0,0];
         force = np.linalg.norm(force)
-        targetF = 2 # Newtons
-        targetR = .5 # Newtons
+        targetF = .5 # Target force
+        targetR = .5 # Force Range
         # Calculate color
         xp = [targetF-targetR, targetF, targetF+targetR]
         fp = [0, 1, 0]
@@ -207,59 +175,17 @@ class OverlayWidget(QVTKStereoViewer):
             # Calculate pose of arrows
             initialRot = PyKDL.Frame(PyKDL.Rotation.RotY(np.pi / 2),
                                      PyKDL.Vector(0, 0, 0))
-            pos = self.robot.get_current_position() * initialRot
+            pos = self.pose * initialRot
             pos = self.cameraTransform.Inverse() * pos
             posMat = posemath.toMatrix(pos)
             posMatTarget = posMat.copy()
             # Scale arrows
-            posMat[0:3,0:3] = posMat[0:3,0:3] * .025 * targetF
+            posMat[0:3,0:3] = posMat[0:3,0:3] * targetR / 5 * targetF
             setActorMatrix(self.targetActor, posMat)
             posMat[0:3,0:3] = posMat[0:3,0:3] * force / targetF
             setActorMatrix(self.arrowActor, posMat)
 
-        elif self.drawType == "bar":
-            self.forceBar.GetProperty().SetColor(color[0], color[1], color[2])
-            # Move background bar
-            pos = self.robot.get_current_position()
-            pos = self.cameraTransform.Inverse() * pos
-            pos2 = PyKDL.Frame(PyKDL.Rotation.Identity(), pos.p)
-            pos2.M.DoRotZ(np.pi)
-            pos2.p = pos2.p + pos2.M.UnitX() * -.015
-            posMat = posemath.toMatrix(pos2)
-            setActorMatrix(self.bar, posMat)
-            setActorMatrix(self.greenLine, posMat)
-            # Scale color bar
-            fp2 = [0, .5, 1]
-            scalePos = np.interp(force, xp, fp2)
-            posMat[1,0:3] = posMat[1,0:3] * scalePos
-            setActorMatrix(self.forceBar, posMat)
-
         return image
-
-    # def imageProc(self, image):
-    #     # Get current force
-    #     force = self.robot.get_current_wrench_body()[0:3]
-    #     force = np.linalg.norm(force)
-    #     targetF = 2 # Newtons
-    #     targetR = .5 # Newtons
-    #     # Calculate color
-    #     xp = [targetF-targetR, targetF, targetF+targetR]
-    #     fp = [0, np.pi / 2, 0]
-    #     colorPos = np.interp(force, xp, fp)
-    #     greenVal = np.sin(colorPos)
-    #     redVal = np.cos(colorPos)
-    #     self.arrowActor.GetProperty().SetColor(redVal, greenVal, 0)
-    #     # Calculate pose of arrows
-    #     initialRot = PyKDL.Frame(PyKDL.Rotation.RotY(np.pi/2), PyKDL.Vector(0,0,0))
-    #     pos = self.cameraTransform.Inverse() * self.robot.get_current_position() * initialRot
-    #     posMat = posemath.toMatrix(pos)
-    #     posMatTarget = posMat.copy()
-    #     # Scale arrows
-    #     posMat[0:3,0:3] = posMat[0:3,0:3] * .025 * targetF
-    #     setActorMatrix(self.targetActor, posMat)
-    #     posMat[0:3,0:3] = posMat[0:3,0:3] * force / targetF
-    #     setActorMatrix(self.arrowActor, posMat)
-    #     return image
 
 def arrayToPyKDLRotation(array):
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])
