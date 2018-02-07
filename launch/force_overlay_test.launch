@@ -1,0 +1,4 @@
+<launch>
+	<node type="play" pkg="rosbag" args="-l $(find dvrk_vision)/data/2018-02-06-19-04-16.bag" name="bag_replay"/>
+	<node type="force_overlay.py" pkg="dvrk_vision" name="force_overlay"/>
+</launch>
