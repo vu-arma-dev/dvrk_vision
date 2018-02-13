@@ -147,6 +147,8 @@ def main(psmName):
     cv2.createTrackbar('max V', _WINDOW_NAME, data['maxV'], 255, nothingCB)
     cv2.createTrackbar('masked', _WINDOW_NAME, 0, 1, nothingCB)
 
+    transformOld = np.array(data['transform']);
+
     # Wait for registration to begin
     while not rospy.is_shutdown():
         # Get last images
@@ -162,7 +164,33 @@ def main(psmName):
         if cols < 60 or rows < 60 or imageL.shape != imageR.shape:
             continue
 
+
+        # Find 3D position of end effector
+        zVector = robot.get_current_position().M.UnitZ()
+        pVector = robot.get_current_position().p
+        offset = np.array([zVector.x(), zVector.y(), zVector.z(), 0])
+        offset = offset * toolOffset
+        pos = np.matrix([pVector.x(), pVector.y(), pVector.z(), 1]) + offset;
+        pos = pos.transpose()
+        pos = np.linalg.inv(transformOld) * pos
+
+        # Project position into 2d coordinates
+        posL = camModel.left.project3dToPixel(pos)
+        posL = [int(l) for l in posL]
+        posR = camModel.right.project3dToPixel(pos)
+        posR = [int(l) for l in posR]
+
+        (rows,cols) = imageL.shape[0:2]
+        posR = (posR[0] + cols, posR[1])
+
         point3d, image = calculate3DPoint(imageL, imageR, camModel)
+
+        # Draw images and display them
+        cv2.circle(image, tuple(posL), 2,(255, 255, 0), -1)
+        cv2.circle(image, tuple(posR), 2,(255, 255, 0), -1)
+        cv2.circle(image, tuple(posL), 7,(255, 255, 0), 2)
+        cv2.circle(image, tuple(posR), 7,(255, 255, 0), 2)
+        
         message = "Press s to start registration. Robot will move to its joint limits."
         cv2.putText(image, message, (50,50), cv2.FONT_HERSHEY_DUPLEX, 1, [0, 0, 255])
         message = "MAKE SURE AREA IS CLEAR"
