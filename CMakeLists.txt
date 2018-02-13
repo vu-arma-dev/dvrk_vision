@@ -24,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
   stereo_image_proc
   message_generation
   dynamic_reconfigure
+  camera_info_manager
 )
 
 find_package(OpenCV 2 REQUIRED)
@@ -154,6 +155,7 @@ include_directories(
 add_library(${PROJECT_NAME}
   # src/rectify.cpp
   src/point_cloud2.cpp
+  src/stereo_camera_info.cpp
   # src/window_thread.cpp
 )
 
