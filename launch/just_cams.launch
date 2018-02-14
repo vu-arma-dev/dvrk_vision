@@ -42,6 +42,7 @@
       <param name="width" value="$(arg width)" />
       <param name="height" value="$(arg height)" />
       <param name="fps" value="$(arg fps)" />
+      <param name="frame_id" value="$(arg frame)" />
     </node>
 
     <node ns="stereo" pkg="nodelet" type="nodelet" args="standalone dvrk_vision/stereo_camera_info" name="cam_info_node">
