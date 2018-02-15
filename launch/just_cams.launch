@@ -8,7 +8,8 @@
   <arg name="height" default="480" />
   <arg name="fps" default="30" />
   <arg name="compressed" default="true"/>
-  <arg name="format" value="jpeg"/>
+  <arg name="format" default="jpeg"/>
+  <arg name="skip_frames" default="0"/>
   <!-- <arg name="compressed" default="false"/>
   <arg name="format" value="YUYV"/> -->
 
@@ -24,11 +25,13 @@
   <arg name="transform_yaml" default=""/>
 
   <!-- Camera settings are as listed by v4l2-ctl -l -->
-  <arg name="exposure" default="300" />
-  <arg name="white_balance" default="2800" />
+  <arg name="exposure" default="150" />
+  <arg name="white_balance" default="4000" />
+  <arg name="auto_white_balance" default="0" />
+  <arg name="auto_exposure" default="1"/>
   <arg name="saturation" default="50" />
   <arg name="brightness" default="0" />
-  <arg name="hue" default="20" />
+  <arg name="hue" default="-150" />
 
   <arg name="camera_info_url_left" default="file://$(find dvrk_vision)/defaults/stereo_cam0_calibration_$(arg width)x$(arg height).yaml" />
   <arg name="camera_info_url_right" default="file://$(find dvrk_vision)/defaults/stereo_cam1_calibration_$(arg width)x$(arg height).yaml" />
@@ -43,6 +46,14 @@
       <param name="height" value="$(arg height)" />
       <param name="fps" value="$(arg fps)" />
       <param name="frame_id" value="$(arg frame)" />
+      <param name="skip_frames" value="$(arg skip_frames)" />
+      <param name="white_balance_temperature" value="$(arg white_balance)"/>
+      <param name="auto_white_balance" value="$(arg auto_white_balance)"/>
+      <param name="exposure_auto" value="$(arg auto_exposure)"/>
+      <param name="exposure_absolute" value="$(arg exposure)"/>
+      <param name="saturation" value="$(arg saturation)"/>
+      <param name="brightness" value="$(arg brightness)"/>
+      <param name="hue" value="$(arg hue)"/>
     </node>
 
     <node ns="stereo" pkg="nodelet" type="nodelet" args="standalone dvrk_vision/stereo_camera_info" name="cam_info_node">
@@ -88,12 +99,12 @@
       <param name="format" value="$(arg format)"/>
       <param name="left/device" value="$(arg device_left)" />
       <param name="right/device" value="$(arg device_right)" />
-      <param name="skip_frames" value="0" />
+      <param name="skip_frames" value="$(arg skip_frames)" />
       <param name="left/camera_info_url" value="$(arg camera_info_url_left)" />
       <param name="right/camera_info_url" value="$(arg camera_info_url_right)" />
       <param name="white_balance_temperature" value="$(arg white_balance)"/>
-      <param name="auto_white_balance" value="100"/>
-      <param name="exposure_auto" value="1"/>
+      <param name="auto_white_balance" value="$(arg auto_white_balance)"/>
+      <param name="exposure_auto" value="$(arg auto_exposure)"/>
       <param name="exposure_absolute" value="$(arg exposure)"/>
       <param name="saturation" value="$(arg saturation)"/>
       <param name="brightness" value="$(arg brightness)"/>
