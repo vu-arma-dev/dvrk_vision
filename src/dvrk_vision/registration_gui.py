@@ -25,30 +25,7 @@ else:
     from PyQt4 import uic
     _QT_VERSION = 4
 
-def cleanResourcePath(path):
-    newPath = path
-    if path.find("package://") == 0:
-        newPath = newPath[len("package://"):]
-        pos = newPath.find("/")
-        if pos == -1:
-            rospy.logfatal("%s Could not parse package:// format", path)
-
-        package = newPath[0:pos]
-        newPath = newPath[pos:]
-        package_path = rospkg.RosPack().get_path(package)
-
-        if package_path == "":
-            rospy.logfatal("%s Package [%s] does not exist",
-                           path.c_str(),
-                           package.c_str());
-
-        newPath = package_path + newPath;
-    elif path.find("file://") == 0:
-        newPath = newPath[len("file://"):]
-
-    if not os.path.isfile(newPath):
-        rospy.logfatal("%s file does not exist", newPath)
-    return newPath;
+from clean_resource_path import cleanResourcePath
 
 class RegistrationWidget(QWidget):
     bridge = CvBridge()
