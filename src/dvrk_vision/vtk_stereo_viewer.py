@@ -6,13 +6,14 @@ import vtktools
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
     _QT_VERSION = 5
     from PyQt5.QtCore import QObject, pyqtSignal
-    from PyQt5.QtWidgets import QWidget
+    from PyQt5.QtWidgets import QWidget, QVBoxLayout
     from QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
     from PyQt5.QtWidgets import QApplication
 else:
     _QT_VERSION = 4
     from PyQt4.QtCore import QObject, pyqtSignal
     from PyQt4.QtWidgets import QWidget
+    from PyQt4.QtGUI import QVBoxLayout
     from PyQt4.QtWidgets import QApplication
     from vtk.qt4.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from cv_bridge import CvBridge, CvBridgeError
@@ -41,11 +42,11 @@ class StereoCameras(QObject):
                 message_filters.Subscriber(infoTopicL, CameraInfo),
                 message_filters.Subscriber(infoTopicR, CameraInfo)]
         if(slop == 0):
-            ts = message_filters.TimeSynchronizer(subs,1)
+            self.ts = message_filters.TimeSynchronizer(subs,1)
         else:
-            ts = message_filters.ApproximateTimeSynchronizer(subs, 1, slop)
+            self.ts = message_filters.ApproximateTimeSynchronizer(subs, 1, slop)
         
-        ts.registerCallback(self.cb)
+        self.ts.registerCallback(self.cb)
         self.started = False
 
     def cb(self, imageMsgL, imageMsgR, camInfoL, camInfoR):
@@ -118,7 +119,10 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
         self.update()
 
 if __name__ == "__main__":
-
+    if _QT_VERSION == 5:
+        from PyQt5.QtWidgets import QMainWindow
+    elif _QT_VERSION == 4:
+        from PyQt4.QtGUI import QMainWindow
     app = QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()
@@ -129,8 +133,22 @@ if __name__ == "__main__":
                          "stereo/left/camera_info",
                          "stereo/right/camera_info",
                          slop = slop)
+    winL = QMainWindow()
+    winR = QMainWindow()
     windowL = QVTKStereoViewer(cams.camL)
+
+    windowR = QVTKStereoViewer(cams.camR)
+
+    layoutL = QVBoxLayout()
+    winL.setCentralWidget(windowL)
+    winR.setCentralWidget(windowR)
+
     windowL.Initialize()
     windowL.start()
-    windowL.show()
+
+    windowR.Initialize()
+    windowR.start()
+
+    winL.show()
+    winR.show()
     sys.exit(app.exec_())

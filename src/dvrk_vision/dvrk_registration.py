@@ -9,12 +9,10 @@ from dvrk import psm
 from collections import deque
 from rigid_transform_3d import rigidTransform3D, calculateRMSE
 import PyKDL
-from IPython import embed
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
 from image_geometry import StereoCameraModel
 from sensor_msgs.msg import CameraInfo
-from geometry_msgs.msg import PoseStamped
-import message_filters
+from geometry_msgs.msg import Pose
 from tf_conversions import posemath
 from tf_sync import CameraSync
 
@@ -22,6 +20,9 @@ _WINDOW_NAME = "Registration"
 
 def combineImages(imageL, imageR):
     (rows,cols) = imageL.shape[0:2]
+    if rows > 640:
+        imageL = cv2.resize(imageL, (640, int(640.0 / rows * cols)))
+        imageR = cv2.resize(imageR, (640, int(640.0 / rows * cols)))
     if len(imageL.shape) == 2:
         shape = (rows, cols*2)
     elif len(imageL.shape) == 3:
@@ -113,16 +114,12 @@ def generateRandomPoint(xMinMax, yMinMax, zMinMax):
         randomPoint[idx] = r * (minMax[1] - minMax[0]) + minMax[0]
     return randomPoint
 
-def displayRegistration(cams, camModel, toolOffset, camearaTransform,
-                        tfSync, started=False):
+def displayRegistration(cams, camModel, toolOffset, camearaTransform, tfSync, started=False):
     rate = rospy.Rate(15) # 15hz
     while not rospy.is_shutdown():
         # Get last images
         imageL = cams.camL.image
         imageR = cams.camR.image
-
-        # t = cams.camL.info.header.stamp
-        # trans = tfBuffer.lookup_transform('turtle_name', 'turtle1', t)
 
         # Wait for images to exist
         if type(imageR) == type(None) or type(imageL) == type(None):
@@ -204,6 +201,7 @@ def displayRegistration(cams, camModel, toolOffset, camearaTransform,
             quit()  # esc to quit
         elif not started and (chr(key%256) == 's' or chr(key%256) == 'S'):
             break # s to continue
+
         rate.sleep()
 
 def getRegistrationPoints(robot, cams, camModel, toolOffset, tfSync):
@@ -271,22 +269,7 @@ def main(psmName):
     rospy.init_node('dvrk_registration', anonymous=True)
     robot = psm(psmName)
     toolOffset = .012 # distance from pinching axle to center of orange nub
-
-    scriptDirectory = os.path.dirname(os.path.abspath(__file__))
-    filePath = os.path.join(scriptDirectory, '..', '..', 'defaults', 
-                            'registration_params.yaml')
-    print(filePath)
-    with open(filePath, 'r') as f:
-        data = yaml.load(f)
-    if 'H' not in data:
-        rospy.logwarn('dVRK Registration: defaults/registration_params.yaml \
-                       empty or malformed. Using defaults for orange tip')
-        data = { 'H': 23,
-                 'minS': 173,
-                 'minV': 68,
-                 'maxV': 255,
-                 'transform':np.eye(4).tolist() }
-    
+   
     frameRate = 15
     slop = 1.0 / frameRate
     cams = StereoCameras( "left/image_rect",
@@ -303,12 +286,27 @@ def main(psmName):
 
     camModel = StereoCameraModel()
     topicLeft = rospy.resolve_name("left/camera_info")
-    msgL = rospy.wait_for_message(topicLeft,CameraInfo,3);
+    msgL = rospy.wait_for_message(topicLeft,CameraInfo, 10);
     topicRight = rospy.resolve_name("right/camera_info")
-    msgR = rospy.wait_for_message(topicRight,CameraInfo,3);
+    msgR = rospy.wait_for_message(topicRight,CameraInfo, 10);
     camModel.fromCameraInfo(msgL,msgR)
 
     # Set up GUI
+    scriptDirectory = os.path.dirname(os.path.abspath(__file__))
+    filePath = os.path.join(scriptDirectory, '..', '..', 'defaults', 
+                            'registration_params.yaml')
+    print(filePath)
+    with open(filePath, 'r') as f:
+        data = yaml.load(f)
+    if 'H' not in data:
+        rospy.logwarn('dVRK Registration: defaults/registration_params.yaml \
+                       empty or malformed. Using defaults for orange tip')
+        data = { 'H': 23,
+                 'minS': 173,
+                 'minV': 68,
+                 'maxV': 255,
+                 'transform':np.eye(4).tolist() }
+
     cv2.namedWindow(_WINDOW_NAME)
     cv2.createTrackbar('H', _WINDOW_NAME, data['H'], 180, nothingCB)
     cv2.createTrackbar('min S', _WINDOW_NAME, data['minS'], 255, nothingCB)
@@ -334,6 +332,13 @@ def main(psmName):
     data['maxV'] = cv2.getTrackbarPos('max V',_WINDOW_NAME)
     with open(filePath, 'w') as f:
         yaml.dump(data,f)
+
+
+
+    # Publish transform as message to camera_transform_pub
+    msg = posemath.toMsg(posemath.fromMatrix(tf))
+    pub = rospy.Publisher('set_camera_transform', Pose, latch=True, queue_size=10)
+    pub.publish(msg)
 
     # Show Registration
     displayRegistration(cams, camModel, toolOffset, tf, tfSync, started=True)
