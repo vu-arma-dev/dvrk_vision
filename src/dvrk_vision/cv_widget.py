@@ -27,7 +27,7 @@ class CvWidget(QtOpenGL.QGLWidget):
     def paintGL(self):
         if not self.isVisible():
             return
-        img = self.cvImage
+        img = self.cvImage.copy()
         if type(img) == type(None):
             return
         # Resize image to fit screen
