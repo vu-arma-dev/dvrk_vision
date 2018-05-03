@@ -40,12 +40,12 @@ def pubTF(pose, parentName, childName):
 
     br.sendTransform(t)
 
-
 if __name__=="__main__":
     rospy.init_node('camera_transform_publisher')
     yamlPath = rospy.get_param("~transform_yaml")
     worldFrame = rospy.get_param("~world_frame")
     childFrame = rospy.get_param("~child_frame")
+        
 
     if yamlPath != "":
         yamlFile = cleanResourcePath(yamlPath)
@@ -56,7 +56,15 @@ if __name__=="__main__":
     else:
         cameraTransform = PyKDL.Frame()
 
+    print(cameraTransform)
+
+    def poseCB(data):
+        global cameraTransform
+        cameraTransform = posemath.fromMsg(data)
+
+    rospy.Subscriber('/stereo/set_camera_transform', geometry_msgs.msg.Pose, poseCB)
+
     rate = rospy.Rate(100) # 60hz
     while not rospy.is_shutdown():
-        pubTF(cameraTransform, "PSM2_psm_base_link", "stereo_camera_frame")
+        pubTF(cameraTransform, worldFrame, childFrame)
         rate.sleep()
