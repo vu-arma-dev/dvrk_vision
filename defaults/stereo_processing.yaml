@@ -2,7 +2,7 @@
 dictitems:
   P1: 200.0
   P2: 400.0
-  correlation_window_size: 11
+  correlation_window_size: 9
   disp12MaxDiff: 0
   disparity_range: 112
   fullDP: false
@@ -10,14 +10,14 @@ dictitems:
     dictitems:
       P1: 200.0
       P2: 400.0
-      correlation_window_size: 11
+      correlation_window_size: 9
       disp12MaxDiff: 0
       disparity_range: 112
       fullDP: false
       groups: !!python/object/new:dynamic_reconfigure.encoding.Config
         state: []
       id: 0
-      min_disparity: 119
+      min_disparity: 77
       name: Default
       parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
         state: []
@@ -32,7 +32,7 @@ dictitems:
       type: ''
       uniqueness_ratio: 15.0
     state: []
-  min_disparity: 119
+  min_disparity: 77
   prefilter_cap: 41
   prefilter_size: 5
   speckle_range: 23
