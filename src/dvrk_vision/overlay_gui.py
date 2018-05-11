@@ -22,7 +22,52 @@ from cv_bridge import CvBridge, CvBridgeError
 from tf import transformations
 from dvrk_vision.vtk_stereo_viewer import StereoCameras, QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
-from dvrk_vision.vtktools import vtkRosTextureActor
+
+class vtkRosTextureActor(vtk.vtkActor):
+    ''' Attaches texture to the actor. Texture is received by subscribing to a ROS topic and then converted to vtk image
+        Input: vtk.Actor
+        Output: Updates the input actor with the texture
+    '''
+
+    def __init__(self,topic, color = (1,0,0)):
+        self.bridge = CvBridge()
+        self.vtkImage = None
+
+        #Subscriber
+        sub = rospy.Subscriber(topic, Image, self.imageCB, queue_size=1)
+        self.texture = vtk.vtkTexture()
+        self.texture.EdgeClampOff()
+        self.color = color
+        self.textureOnOff(False)
+
+    #Subscriber callback function
+    def imageCB(self, msg):
+        try:
+            # Convert your ROS Image message to OpenCV2
+            cv2_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        except CvBridgeError, e:
+            print(e)
+        else:
+            self.setTexture(cv2_img)
+
+    def setTexture(self, img):
+        if type(self.vtkImage) == type(None):
+            self.vtkImage = vtktools.makeVtkImage(img.shape)
+        vtktools.numpyToVtkImage(img, self.vtkImage)
+        if vtk.VTK_MAJOR_VERSION <= 5:
+            self.texture.SetInput(self.vtkImage)
+        else:
+            self.texture.SetInputData(self.vtkImage)
+
+    def textureOnOff(self, data):
+        if data:
+            self.SetTexture(self.texture)
+            self.GetProperty().SetColor(1, 1, 1)
+            self.GetProperty().LightingOff()
+        else:
+            self.SetTexture(None)
+            self.GetProperty().SetColor(self.color)
+            self.GetProperty().LightingOn()
 
 class OverlayWidget(QWidget):
     bridge = CvBridge()
