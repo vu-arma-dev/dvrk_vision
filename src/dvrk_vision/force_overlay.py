@@ -18,6 +18,7 @@ else:
 import dvrk_vision.vtktools as vtktools
 from sensor_msgs.msg import Image, CameraInfo
 from visualization_msgs.msg import Marker
+from geometry_msgs.msg import WrenchStamped
 from cv_bridge import CvBridge, CvBridgeError
 from tf import transformations
 from dvrk_vision.vtk_stereo_viewer import StereoCameras, QVTKStereoViewer
@@ -122,17 +123,17 @@ def setActorMatrix(actor, npMatrix):
     transform.SetMatrix(npMatrix.ravel())
     actor.SetUserTransform(transform)
 
-class OverlayWidget(QVTKStereoViewer):
-    def __init__(self, camera, dvrkName, cameraTransform, masterWidget=None, parent=None):
-        super(OverlayWidget, self).__init__(camera, parent=parent)
+class ForceOverlayWidget(QVTKStereoViewer):
+    def __init__(self, cam, camTransform, dvrkName, forceTopic, draw="bar", masterWidget=None, parent=None):
+        super(ForceOverlayWidget, self).__init__(cam, parent=parent)
         self.masterWidget = masterWidget
         if self.masterWidget == None:
             self.robot = psm(dvrkName)
         else:
             self.robot = self.masterWidget.robot
-        self.cameraTransform = cameraTransform
-        self.drawType = "arrow"
-        # self.drawType = "bar"
+        self.cameraTransform = camTransform
+        self.drawType = draw
+        rospy.Subscriber(forceTopic, WrenchStamped, self.forceCB)
 
     def renderSetup(self):
         if self.drawType == "arrow":
@@ -189,10 +190,14 @@ class OverlayWidget(QVTKStereoViewer):
         self.iren.RemoveObservers('MouseMoveEvent')
         self.iren.RemoveObservers('MiddleButtonPressEvent')
         self.iren.RemoveObservers('MiddleButtonPressEvent')
+        self.currentForce
     
+    def forceCB(self, data):
+        self.currentForce = [data.wrench.force.x, data.wrench.force.y, data.wrench.force.z]
+
     def imageProc(self,image):
         # Get current force
-        force = self.robot.get_current_wrench_body()[0:3]
+        force = self.currentForce
         force = np.linalg.norm(force)
         targetF = 2 # Newtons
         targetR = .5 # Newtons
@@ -236,31 +241,6 @@ class OverlayWidget(QVTKStereoViewer):
 
         return image
 
-    # def imageProc(self, image):
-    #     # Get current force
-    #     force = self.robot.get_current_wrench_body()[0:3]
-    #     force = np.linalg.norm(force)
-    #     targetF = 2 # Newtons
-    #     targetR = .5 # Newtons
-    #     # Calculate color
-    #     xp = [targetF-targetR, targetF, targetF+targetR]
-    #     fp = [0, np.pi / 2, 0]
-    #     colorPos = np.interp(force, xp, fp)
-    #     greenVal = np.sin(colorPos)
-    #     redVal = np.cos(colorPos)
-    #     self.arrowActor.GetProperty().SetColor(redVal, greenVal, 0)
-    #     # Calculate pose of arrows
-    #     initialRot = PyKDL.Frame(PyKDL.Rotation.RotY(np.pi/2), PyKDL.Vector(0,0,0))
-    #     pos = self.cameraTransform.Inverse() * self.robot.get_current_position() * initialRot
-    #     posMat = posemath.toMatrix(pos)
-    #     posMatTarget = posMat.copy()
-    #     # Scale arrows
-    #     posMat[0:3,0:3] = posMat[0:3,0:3] * .025 * targetF
-    #     setActorMatrix(self.targetActor, posMat)
-    #     posMat[0:3,0:3] = posMat[0:3,0:3] * force / targetF
-    #     setActorMatrix(self.arrowActor, posMat)
-    #     return image
-
 def arrayToPyKDLRotation(array):
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])
     y = PyKDL.Vector(array[0][1], array[1][1], array[2][1])
@@ -291,13 +271,11 @@ if __name__ == "__main__":
                          "stereo/left/camera_info",
                          "stereo/right/camera_info",
                          slop = slop)
-    # windowL = QVTKStereoViewer(cams.camL)
-    windowL = OverlayWidget(cams.camL, 'PSM2', cameraTransform)
+    windowL = ForceOverlayWidget(cam = cams.camL,
+                                 camTransform = cameraTransform,
+                                 dvrkName = 'PSM2',
+                                 forceTopic = '/atinetft/wrench')
     windowL.Initialize()
     windowL.start()
     windowL.show()
-    windowR = OverlayWidget(cams.camR, 'PSM2', cameraTransform, masterWidget = windowL)
-    windowR.Initialize()
-    windowR.start()
-    windowR.show()
     sys.exit(app.exec_())
