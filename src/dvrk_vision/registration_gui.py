@@ -17,12 +17,12 @@ from vtk_stereo_viewer import StereoCameras, QVTKStereoViewer
 import vtktools
 # Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
-    from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
+    from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QApplication
     from PyQt5.QtCore import Qt
     from PyQt5 import uic
     _QT_VERSION = 5
 else:
-    from PyQt4.QtGui import QWidget, QHBoxLayout, QLabel
+    from PyQt4.QtGui import QWidget, QHBoxLayout, QLabel, QApplication
     from PyQt4.QtCore import Qt
     from PyQt4 import uic
     _QT_VERSION = 4
