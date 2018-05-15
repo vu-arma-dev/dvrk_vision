@@ -36,7 +36,8 @@ def setActorMatrix(actor, npMatrix):
     transform = vtk.vtkTransform()
     transform.Identity()
     transform.SetMatrix(npMatrix.ravel())
-    actor.SetUserTransform(transform)
+    actor.SetPosition(transform.GetPosition())
+    actor.SetOrientation(transform.GetOrientation())
 
 class ForceOverlayWidget(QVTKStereoViewer):
     def __init__(self, cam, camTransform, dvrkName, forceTopic, draw="bar", masterWidget=None, parent=None):
