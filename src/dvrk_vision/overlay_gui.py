@@ -166,7 +166,9 @@ class OverlayWidget(QWidget):
         transform.SetMatrix(mat.ravel())
         self.actor_moving.SetPosition(transform.GetPosition())
         self.actor_moving.SetOrientation(transform.GetOrientation())
-        self.actor_moving.VisibilityOn()             
+        self.vtkWidget.ren.ResetCameraClippingRange()
+        self.vtkWidget.GetRenderWindow().Render()
+        self.actor_moving.VisibilityOn()  
 
     def _updateActorPolydata(self,actor,polydata,color=None):
         # Modifies an actor with new polydata
