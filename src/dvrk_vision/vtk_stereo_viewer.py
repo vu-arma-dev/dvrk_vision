@@ -64,7 +64,6 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
         self.cam = camera
         self.setUp = False
         self.aspectRatio = 1
-        self.numResizes = 0
 
     def start(self):
         self.cam.trigger.connect(self.imageCb)
@@ -104,8 +103,6 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
         return image
 
     def resizeEvent(self, ev):
-        self.numResizes = self.numResizes + 1
-        print self.width(), self.height(), self.numResizes
         newHeight = int(ev.size().height() * self.aspectRatio)
         size = min(newHeight, ev.size().width())
         offset = ((ev.size().width() - size) / 2,
