@@ -70,12 +70,13 @@ class ManualRegistrationWidget(OverlayWidget):
             direction = np.subtract(actorPos, camPos)
             direction = direction / np.linalg.norm(direction) * dollyFactor
             self.actor_moving.AddPosition(direction)
-            self.vtkWidget.ren.ResetCameraClippingRange()
-            self.vtkWidget.GetRenderWindow().Render()
-
+            if self.isVisible():
+                self.vtkWidget.ren.ResetCameraClippingRange()
+                
     def poseCallback(self, data):
         super(ManualRegistrationWidget, self).poseCallback(data)
-        self.vtkWidget.ren.ResetCameraClippingRange()
+        if self.isVisible():
+            self.vtkWidget.ren.ResetCameraClippingRange()
 
             # mat = vtktools.vtkMatrixtoNpMatrix(self.actor_moving.GetMatrix())
             # print mat
