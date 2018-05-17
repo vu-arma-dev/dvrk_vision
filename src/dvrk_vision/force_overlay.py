@@ -38,6 +38,7 @@ def setActorMatrix(actor, npMatrix):
     transform.SetMatrix(npMatrix.ravel())
     actor.SetPosition(transform.GetPosition())
     actor.SetOrientation(transform.GetOrientation())
+    actor.SetScale(transform.GetScale())
 
 class ForceOverlayWidget(QVTKStereoViewer):
     def __init__(self, cam, camTransform, dvrkName, forceTopic, draw="bar", masterWidget=None, parent=None):
@@ -115,8 +116,8 @@ class ForceOverlayWidget(QVTKStereoViewer):
         # Get current force
         force = self.currentForce
         force = np.linalg.norm(force)
-        targetF = 2 # Newtons
-        targetR = .5 # Newtons
+        targetF = 4 # Newtons
+        targetR = 1 # Newtons
         # Calculate color
         xp = [targetF-targetR, targetF, targetF+targetR]
         fp = [0, 1, 0]
@@ -152,6 +153,7 @@ class ForceOverlayWidget(QVTKStereoViewer):
             # Scale color bar
             fp2 = [0, .5, 1]
             scalePos = np.interp(force, xp, fp2)
+            print scalePos
             posMat[1,0:3] = posMat[1,0:3] * scalePos
             setActorMatrix(self.forceBar, posMat)
 
