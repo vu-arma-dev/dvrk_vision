@@ -17,6 +17,9 @@ def npMatrixToVtkMatrix(matrix):
             retMat.SetElement(r,c,matrix[r,c])
     return retMat
 
+def vtkMatrixtoNpMatrix(matrix):
+    return np.array(matrix.GetData(), (4,4))
+
 # Sets up a three channel empty vtkImageData object
 def makeVtkImage(imgDims):
     ''' Creates a blank vtkImageData object of specified dimensions
