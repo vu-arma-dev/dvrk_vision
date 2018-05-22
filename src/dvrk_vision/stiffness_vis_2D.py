@@ -3,11 +3,9 @@ import numpy as np
 import rospy
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 from sensor_msgs.msg import Image
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 import message_filters
 import matplotlib.pyplot as plt
-import scipy
+from scipy.interpolate import griddata
 
 ## Take a Float64 MultiArray message, convert it into a numpyMatrix
 def multiArrayToMatrixList(ma_msg):
@@ -45,13 +43,19 @@ def matrixListToMultiarray(matrix):
     
     return msg
 
+def generateGrid(xmin, xmax, ymin, ymax, res):
+    x = np.linspace(xmin, xmax, res)
+    y = np.linspace(ymin, ymax, res)
+    Xg,Yg = np.meshgrid(x,y)
+    grid = np.array([Xg.flatten(), Yg.flatten()]).T
+    return grid
+
 class StiffnessToImageNode:
     def __init__(self):
         rospy.init_node('stiffness_to_image_converter', anonymous=True)
         self.domain = [-15, 10, -15, 30]
         self.resolution = 100
-        self.grid = self.generateGrid(self.domain[0], self.domain[1], self.domain[2], self.domain[3])
-        self.gp = self.gp_init()
+        self.grid = generateGrid(self.domain[0], self.domain[1], self.domain[2], self.domain[3], self.resolution)
         # Publishers and subscribers
         self.imagePub = rospy.Publisher('/stereo/stiffness_image', Image, queue_size = 1)
         stiffSub = message_filters.Subscriber('/dvrk/GP/get_stiffness', Float64MultiArray)
@@ -70,6 +74,7 @@ class StiffnessToImageNode:
 
     def stiffnessCB(self, stiffness):
         self.stiffness = multiArrayToMatrixList(stiffness).transpose()
+
     def update(self):
         if self.points is None:
             return
@@ -78,10 +83,7 @@ class StiffnessToImageNode:
         if len(pointsMat) != len(stiffMat):
             return
         assert pointsMat.shape[1] == 3
-        # self.gp.fit(pointsMat[:,0:2], stiffMat)
-        # stiffMap = self.gp.predict(self.grid)
-        # stiffMap = stiffMap.reshape(self.resolution, self.resolution)
-        stiffMap = scipy.interpolate.griddata(pointsMat[:,0:2], stiffMat, self.grid, method="linear", fill_value=-1).reshape(self.resolution, self.resolution)
+        stiffMap = griddata(pointsMat[:,0:2], stiffMat, self.grid, method="linear", fill_value=-1).reshape(self.resolution, self.resolution)
         stiffMap[stiffMap == -1] = np.min(stiffMap[stiffMap != -1])
         print(np.min(stiffMap), np.max(stiffMap), np.min(stiffMat), np.max(stiffMat))
         # Normalize
@@ -95,21 +97,6 @@ class StiffnessToImageNode:
         plt.colorbar()
         plt.scatter(pointsMat[:,0],pointsMat[:,1])
         plt.pause(0.05)
-
-    def generateGrid(self, xmin, xmax, ymin, ymax, res=100):
-        x = np.linspace(xmin, xmax, res)
-        y = np.linspace(ymin, ymax, res)
-        Xg,Yg = np.meshgrid(x,y)
-        grid = np.array([Xg.flatten(), Yg.flatten()]).T
-
-        return grid
-    
-    def gp_init(self):
-        # kernel = C(1.0, (1e-3, 1e3))*RBF(6, (1e-2, 1e2))
-        # gp = GaussianProcessRegressor(kernel=kernel, optimizer=None, n_restarts_optimizer=9)
-        kernel = RBF(1.0, (1e-2, 1e2))
-        gp = GaussianProcessRegressor(kernel=kernel, optimizer='fmin_l_bfgs_b', n_restarts_optimizer=9)
-        return gp
 
 if __name__ == '__main__':
     node = StiffnessToImageNode()
