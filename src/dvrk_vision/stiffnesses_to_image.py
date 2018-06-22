@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 import numpy as np
 import rospy
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
@@ -8,15 +9,10 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 import message_filters
 import matplotlib.pyplot as plt
 import scipy
-
-# Visualization stuff
 import vtk
-import dvrk_vision.vtktools as vtktools
-from dvrk_vision.clean_resource_path import cleanResourcePath
-from dvrk_vision.overlay_gui import vtkRosTextureActor
 import cv2
-import os
-import ctypes
+from dvrk_vision.clean_resource_path import cleanResourcePath
+import dvrk_vision.uvtoworld as uvtoworld
 
 ## Take a Float64 MultiArray message, convert it into a numpyMatrix
 def multiArrayToMatrixList(ma_msg):
@@ -56,7 +52,7 @@ def matrixListToMultiarray(matrix):
 
 class vtkTimerCallback():
     def __init__(self, renWin):
-        self.rate = rospy.Rate(5)
+        self.rate = rospy.Rate(30)
         self.renWin = renWin
 
     def execute(self, obj, event):
@@ -87,73 +83,54 @@ class StiffnessToImageNode:
         pointsSub = message_filters.Subscriber('/dvrk/GP/get_surface_points', Float64MultiArray)
         stiffSub.registerCallback(self.stiffnessCB)
         pointsSub.registerCallback(self.pointsCB)
-        self.points = None
-        self.oldPoints = None
-        self.stiffness = None
+        self.points = np.empty((0,2))
+        self.oldPoints = np.empty((0,3))
+        self.stiffness = np.empty(0)
+        self.points2D = np.empty((0,3))
 
-        self.visualize = visualize
+        # Organ stuff
+        meshPath = "package://oct_15_demo/resources/largeProstate.obj"
+        texturePath = "package://oct_15_demo/resources/largeProstate.png"
+        scale = 1000.06
+        # Read in STL
+        meshPath = cleanResourcePath(meshPath)
+        extension = os.path.splitext(meshPath)[1]
+        if extension == ".stl" or extension == ".STL":
+            meshReader = vtk.vtkSTLReader()
+        elif extension == ".obj" or extension == ".OBJ":
+            meshReader = vtk.vtkOBJReader()
+        else:
+            ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
+        meshReader.SetFileName(meshPath)
+        # Scale STL
+        transform = vtk.vtkTransform()
+        transform.Scale(scale, scale, scale)
+        transform.Translate(0,.015,-.142)
+        transform.RotateX(110)
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetTransform(transform)
+        transformFilter.SetInputConnection(meshReader.GetOutputPort())
+        transformFilter.Update()
+        self.organPolydata = transformFilter.GetOutput()
+        # Set texture to default
+        self.texture = cv2.imread(cleanResourcePath(texturePath))
+        self.converter = uvtoworld.UVToWorldConverter(self.organPolydata)
 
-        if self.visualize:
-            # Organ stuff
-            meshPath = "package://oct_15_demo/resources/largeProstate.obj"
-            texturePath = "package://oct_15_demo/resources/largeProstate.png"
-            scale = 1000.06
-            # Read in STL
-            meshPath = cleanResourcePath(meshPath)
-            extension = os.path.splitext(meshPath)[1]
-            if extension == ".stl" or extension == ".STL":
-                meshReader = vtk.vtkSTLReader()
-            elif extension == ".obj" or extension == ".OBJ":
-                meshReader = vtk.vtkOBJReader()
-            else:
-                ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
-            meshReader.SetFileName(meshPath)
-            # Scale STL
-            transform = vtk.vtkTransform()
-            transform.Scale(scale, scale, scale)
-            transform.Translate(0,.015,-.142)
-            transform.RotateX(110)
-            transformFilter = vtk.vtkTransformFilter()
-            transformFilter.SetTransform(transform)
-            transformFilter.SetInputConnection(meshReader.GetOutputPort())
-            transformFilter.Update()
-            self.organPolydata = transformFilter.GetOutput()
+        if visualize:
+            from dvrk_vision.overlay_gui import vtkRosTextureActor
+            self.visualize = visualize
+            self.ren = vtk.vtkRenderer()
+
             color = (0,0,1)
             self.actor_organ = vtkRosTextureActor("stiffness_texture", color = color)
             self.actor_organ.GetProperty().BackfaceCullingOn()
             self._updateActorPolydata(self.actor_organ,
                                       polydata=  self.organPolydata,
                                       color = color)
-
-            # Set texture to default
-            self.texture = cv2.imread(cleanResourcePath(texturePath))
             self.actor_organ.setTexture(self.texture.copy())
             self.actor_organ.textureOnOff(True)
-            
-            # Build cell search structure
-            self.cellLocator = vtk.vtkCellLocator()
-            self.cellLocator.SetDataSet(transformFilter.GetOutput())
-            self.cellLocator.BuildLocator()
+            self.ren.AddActor(self.actor_organ)
 
-            # Make 2D Coordinates for lookup
-            tCoords = self.organPolydata.GetPointData().GetTCoords()
-            nTuples = tCoords.GetNumberOfTuples()
-            tCoordPoints = vtk.vtkFloatArray()
-            tCoordPoints.SetNumberOfComponents(3)
-            # tCoordPoints.SetNumberOfTuples(3)
-            tCoordPoints.Allocate(nTuples*3)
-            tCoordPoints.SetNumberOfTuples(nTuples)
-            tCoordPoints.CopyComponent(0, tCoords, 0)
-            tCoordPoints.CopyComponent(1, tCoords, 1)
-            tCoordPoints.FillComponent(2,0)
-            pts = vtk.vtkPoints()
-            pts.SetData(tCoordPoints)
-            self.polyData2D = vtk.vtkPolyData()
-            self.polyData2D.SetPoints(pts)
-            self.polyData2D.SetPolys(self.organPolydata.GetPolys())
-            self.polyData2D.BuildCells()
-
-            self.ren = vtk.vtkRenderer()
             self.polyData = vtk.vtkPolyData()
             # delaunay = vtk.vtkDelaunay2D()
             # if vtk.VTK_MAJOR_VERSION <= 5:
@@ -162,7 +139,6 @@ class StiffnessToImageNode:
             #     delaunay.SetInputData(self.polyData)
             # mapper = vtk.vtkDataSetMapper()
             # mapper.SetInputConnection(delaunay.GetOutputPort())
-            self.ren.AddActor(self.actor_organ)
             mapper = vtk.vtkPolyDataMapper()
             mapper.SetScalarVisibility(1)
             if vtk.VTK_MAJOR_VERSION <= 5:
@@ -175,16 +151,23 @@ class StiffnessToImageNode:
             actor.GetProperty().SetSpecular(0)
             actor.GetProperty().SetAmbient(1)
             self.ren.AddActor(actor)
+
             self.renWin = vtk.vtkRenderWindow()
             self.renWin.AddRenderer(self.ren)
             self.iren = vtk.vtkRenderWindowInteractor()
             self.iren.SetRenderWindow(self.renWin)
             self.renWin.Render()
-            cb = vtkTimerCallback(self.renWin)
-            cb.update = self.update
-            self.iren.AddObserver('TimerEvent', cb.execute)
-            self.iren.CreateRepeatingTimer(100)
+            # cb = vtkTimerCallback(self.renWin)
+            # cb.update = self.update
+            # self.iren.AddObserver('TimerEvent', cb.execute)
+            # self.iren.CreateRepeatingTimer(15)
             self.iren.Start()
+
+        else:
+            rate = rospy.Rate(100)
+            while not rospy.is_shutdown():
+                self.update()
+                rate.sleep()
 
     def _updateActorPolydata(self,actor,polydata,color=None):
         # Modifies an actor with new polydata
@@ -209,62 +192,38 @@ class StiffnessToImageNode:
     def stiffnessCB(self, stiffness):
         self.stiffness = multiArrayToMatrixList(stiffness).transpose()
 
-    def updatePoints(self, points, scalars):
-        self.polyData.Reset()
-        vtkPoints = vtk.vtkPoints()
-        vtkCells = vtk.vtkCellArray()
-        # colors = vtk.vtkUnsignedCharArray()
-        # colors.SetNumberOfComponents(3)
-        # colors.SetName("Colors")
-        # minZ = np.min(scalars)
-        # maxZ = np.max(scalars)
-        # stiffness = (scalars - minZ) / (maxZ - minZ)
-        # r = np.clip(stiffness * 3, 0, 1) * 255
-        # g = np.clip(stiffness * 3 - 1, 0, 1) * 255
-        # b = np.clip(stiffness * 3 - 2, 0, 1) * 255
-        # for i, point in enumerate(np.hstack((points, r, g, b))):
-        for i, point in enumerate(points):
-            pointId = vtkPoints.InsertNextPoint(point)
-            vtkCells.InsertNextCell(1)
-            vtkCells.InsertCellPoint(pointId)
-        self.polyData.SetPoints(vtkPoints)
-        self.polyData.SetVerts(vtkCells)
-        self.polyData.Modified()
-        # self.polyData.GetPointData().SetScalars(colors)
-        cell = vtk.vtkGenericCell()
-        cell.SetCellTypeToTriangle ()
+    def getNewPoints(self):
+        # Turn to binary for easy comparison
+        pointsNewB = [a.tobytes() for a in self.points]
+        pointsOldB = [a.tobytes() for a in self.oldPoints]
+        if len(pointsOldB) < len(pointsNewB):
+            pointsOldB.append([np.nan] * (len(pointsNewB) - len(pointsOldB)))
+        else:
+            pointsOldB = pointsOldB[:len(pointsNewB)]
+        pointsNew = np.setxor1d(pointsNewB, pointsOldB)
+        pointsNew = np.array([np.frombuffer(a, count=3) for a in pointsNew])
+        pointsOld = np.setand1d(pointsNewB, pointsOldB)
+        pointsOld = np.array([np.frombuffer(a, count=3) for a in pointsOld])
+        return pointsNew, pointsOld
 
-        tolerance = .01
-        t = vtk.mutable(0)
-        subId = vtk.mutable(0)
-        cellId = vtk.mutable(0)
-        dist = vtk.mutable(0)
-        pos = [0.0, 0.0, 0.0]
-        pos2 = [0.0,0.0,0.0]
-        pcoords = [0.0, 0.0, 0.0]
-        tCoords = [0.0 ,0., 0.0]
-        weights = [0.0, 0.0, 0.0]
-        shape = self.texture.shape
+    def update(self):
+        if len(self.points) != len(self.stiffness):
+            return
+        points = self.points
+        scalars = self.stiffness
+        if np.all(self.points == self.oldPoints):
+            return
 
-        img = self.texture.copy()
-
-        projectedPoints = np.empty((len(points), 2))
-
-        for idx, point in enumerate(points):
-            start = point + [0,0, 5]
-            end = point + [0,0,-5]
-            # self.cellLocator.IntersectWithLine(start, end, tolerance, t, pos, pcoords, subId, cellId, cell)
-            self.cellLocator.FindClosestPoint(point, pos, cell, cellId, subId, dist)
-            cell.EvaluatePosition(point, pos2, subId, pcoords, dist, weights)
-            self.polyData2D.GetCell(cellId).EvaluateLocation(subId, pcoords, tCoords, weights)
-            texCoords = [tCoords[0] * shape[0], (1 - tCoords[1]) * self.texture.shape[1]]
-            projectedPoints[idx, :] = texCoords
-            texCoords = tuple(int(a) for a in texCoords)
-            # img = cv2.circle(img, texCoords, 5, (0,255,0), -1)
+        self.getNewPoints()
+        # Project points into UV space        
+        texCoords = self.converter.toUVSpace(points)[:, 0:2]
+        # Flip y coordinates to match image space
+        texCoords[:,1] *= -1
+        texCoords[:,1] +=  1
 
         resolution = 100
-        grid = generateGrid(0, shape[1], 0, shape[0], resolution)
-        stiffMap = scipy.interpolate.griddata(projectedPoints, scalars, grid, method="linear", fill_value=-1)
+        grid = generateGrid(0, 1, 0, 1, resolution)
+        stiffMap = scipy.interpolate.griddata(texCoords, scalars, grid, method="linear", fill_value=-1)
         stiffMap = stiffMap.reshape(resolution, resolution)
         stiffMap[stiffMap == -1] = np.min(stiffMap[stiffMap != -1])
         # print(np.min(stiffMap), np.max(stiffMap), np.min(stiffMat), np.max(stiffMat))
@@ -277,41 +236,38 @@ class StiffnessToImageNode:
         g = np.clip(stiffMap * 3 - 1, 0, 1) * scale
         b = np.clip(stiffMap * 3 - 2, 0, 1) * scale
         stiffImg = np.dstack((b, g, r)).astype(np.uint8)
+        shape = self.texture.shape
         stiffImg = cv2.resize(stiffImg, (shape[1], shape[0]))
+        img = self.texture.copy()
         img = np.subtract(img, stiffImg.astype(int))
         img = np.clip(img, 0, 255).astype(np.uint8)
-        self.actor_organ.setTexture(img)
-        # self.renWin.Render()
-
-    def update(self):
-        if self.points is None:
-            return
-        if np.all(self.points == self.oldPoints):
-            return
         self.oldPoints = self.points
-        pointsMat = self.points
-        stiffMat = self.stiffness
-        if len(pointsMat) != len(stiffMat):
-            return
-        assert pointsMat.shape[1] == 3
-        # self.gp.fit(pointsMat[:,0:2], stiffMat)
-        # stiffMap = self.gp.predict(self.grid)
-        # stiffMap = stiffMap.reshape(self.resolution, self.resolution)
-        # stiffMap = scipy.interpolate.griddata(pointsMat[:,0:2], stiffMat, self.grid, method="linear", fill_value=-1).reshape(self.resolution, self.resolution)
-        # stiffMap[stiffMap == -1] = np.min(stiffMap[stiffMap != -1])
-        # # print(np.min(stiffMap), np.max(stiffMap), np.min(stiffMat), np.max(stiffMat))
-        # # Normalize
-        # stiffMap[stiffMap < np.mean(stiffMap)] = np.mean(stiffMap)
-        # stiffMap -= np.min(stiffMap)
-        # stiffMap /= np.max(stiffMap)
-        # stiffMap *= 255
-        self.updatePoints(pointsMat, stiffMat)
-        # plt.figure(1)
-        # plt.clf()
-        # plt.imshow(stiffMap, origin='lower', cmap="hot", extent=self.domain)
-        # plt.colorbar()
-        # plt.scatter(pointsMat[:,0],pointsMat[:,1])
-        # plt.pause(0.05)
+
+        if self.visualize:
+            self.polyData.Reset()
+            vtkPoints = vtk.vtkPoints()
+            vtkCells = vtk.vtkCellArray()
+            # colors = vtk.vtkUnsignedCharArray()
+            # colors.SetNumberOfComponents(3)
+            # colors.SetName("Colors")
+            # minZ = np.min(scalars)
+            # maxZ = np.max(scalars)
+            # stiffness = (scalars - minZ) / (maxZ - minZ)
+            # r = np.clip(stiffness * 3, 0, 1) * 255
+            # g = np.clip(stiffness * 3 - 1, 0, 1) * 255
+            # b = np.clip(stiffness * 3 - 2, 0, 1) * 255
+            # for i, point in enumerate(np.hstack((points, r, g, b))):
+            for i, point in enumerate(points):
+                pointId = vtkPoints.InsertNextPoint(point)
+                vtkCells.InsertNextCell(1)
+                vtkCells.InsertCellPoint(pointId)
+            self.polyData.SetPoints(vtkPoints)
+            self.polyData.SetVerts(vtkCells)
+            self.polyData.Modified()
+            # self.polyData.GetPointData().SetScalars(colors)
+
+            self.actor_organ.setTexture(img)
+        
     
     def gp_init(self):
         # kernel = C(1.0, (1e-3, 1e3))*RBF(6, (1e-2, 1e2))
