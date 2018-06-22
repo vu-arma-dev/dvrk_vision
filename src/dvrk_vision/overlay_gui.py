@@ -90,42 +90,46 @@ class OverlayWidget(QWidget):
         self.vl.addWidget(self.vtkWidget)
         self.vtkFrame.setLayout(self.vl)
 
+        self.masterWidget = masterWidget
         self.otherWindows = []
-        if type(masterWidget) != type(None):
-            masterWidget.otherWindows.append(self)
-            self.otherWindows.append(masterWidget) 
+        if type(self.masterWidget) != type(None):
+            self.masterWidget.otherWindows.append(self)
+            self.otherWindows.append(self.masterWidget) 
         
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
 
     def renderSetup(self):
-        # Set up 3D actor for organ
-        meshPath = cleanResourcePath(self.meshPath)
-        extension = os.path.splitext(meshPath)[1]
-        if extension == ".stl" or extension == ".STL":
-            meshReader = vtk.vtkSTLReader()
-        elif extension == ".obj" or extension == ".OBJ":
-            meshReader = vtk.vtkOBJReader()
+        if type(self.masterWidget) != type(None):
+            self.actor_moving = self.masterWidget.actor_moving
         else:
-            ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
-        meshReader.SetFileName(meshPath)
-        # Scale STL
-        transform = vtk.vtkTransform()
-        transform.Scale(self.scale,self.scale,self.scale)
-        transformFilter = vtk.vtkTransformFilter()
-        transformFilter.SetTransform(transform)
-        transformFilter.SetInputConnection(meshReader.GetOutputPort())
-        transformFilter.Update()
-        color = (0,0,1)
-        self.actor_moving = vtkRosTextureActor("stiffness_texture", color = color)
-        self.actor_moving.GetProperty().BackfaceCullingOn()
-        self._updateActorPolydata(self.actor_moving,
-                                  polydata=transformFilter.GetOutput(),
-                                  color = color)
-        # Set texture to default
-        image = cv2.imread(cleanResourcePath(self.texturePath))
-        self.actor_moving.setTexture(image)
-        self.actor_moving.textureOnOff(True)
+            # Set up 3D actor for organ
+            meshPath = cleanResourcePath(self.meshPath)
+            extension = os.path.splitext(meshPath)[1]
+            if extension == ".stl" or extension == ".STL":
+                meshReader = vtk.vtkSTLReader()
+            elif extension == ".obj" or extension == ".OBJ":
+                meshReader = vtk.vtkOBJReader()
+            else:
+                ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
+            meshReader.SetFileName(meshPath)
+            # Scale STL
+            transform = vtk.vtkTransform()
+            transform.Scale(self.scale,self.scale,self.scale)
+            transformFilter = vtk.vtkTransformFilter()
+            transformFilter.SetTransform(transform)
+            transformFilter.SetInputConnection(meshReader.GetOutputPort())
+            transformFilter.Update()
+            color = (0,0,1)
+            self.actor_moving = vtkRosTextureActor("stiffness_texture", color = color)
+            self.actor_moving.GetProperty().BackfaceCullingOn()
+            self._updateActorPolydata(self.actor_moving,
+                                      polydata=transformFilter.GetOutput(),
+                                      color = color)
+            # Set texture to default
+            image = cv2.imread(cleanResourcePath(self.texturePath))
+            self.actor_moving.setTexture(image)
+            self.actor_moving.textureOnOff(True)
 
         # Hide actor
         self.actor_moving.VisibilityOff()
@@ -166,10 +170,7 @@ class OverlayWidget(QWidget):
         transform.SetMatrix(mat.ravel())
         self.actor_moving.SetPosition(transform.GetPosition())
         self.actor_moving.SetOrientation(transform.GetOrientation())
-        if self.isVisible():
-            self.vtkWidget.ren.ResetCameraClippingRange()
-        # self.vtkWidget.GetRenderWindow().Render()
-        self.actor_moving.VisibilityOn()  
+        self.actor_moving.VisibilityOn()
 
     def _updateActorPolydata(self,actor,polydata,color=None):
         # Modifies an actor with new polydata
