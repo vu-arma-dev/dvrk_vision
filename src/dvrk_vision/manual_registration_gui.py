@@ -11,6 +11,26 @@ import dvrk_vision.vtktools as vtktools
 from visualization_msgs.msg import Marker
 import numpy as np
 import rospy
+import os
+
+def makeMarker(path, scale):
+    markerMsg = Marker()
+    # HACK BECAUSE RVIZ DOESN'T USE OBJ
+    filename, extension = os.path.splitext(path)
+    markerMsg.mesh_resource = filename + '.stl'
+    markerMsg.header.frame_id = "/stereo_camera_frame"
+    markerMsg.header.stamp    = rospy.Time.now()
+    markerMsg.id = 0
+    markerMsg.type = 10 # mesh resource
+    markerMsg.action = 0
+    markerMsg.color.r = 0
+    markerMsg.color.g = 1.0
+    markerMsg.color.b = 0
+    markerMsg.color.a = 1.0
+    markerMsg.scale.x = scale
+    markerMsg.scale.y = scale
+    markerMsg.scale.z = scale
+    return markerMsg
 
 class ManualRegistrationWidget(OverlayWidget):
     def __init__(self, camera, texturePath, meshPath, scale=1, masterWidget=None, parent=None):
@@ -22,28 +42,41 @@ class ManualRegistrationWidget(OverlayWidget):
         self.poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
 
         self.posePub = rospy.Publisher("/stereo/registration_marker", Marker, queue_size=10)
+        self.marker = makeMarker(meshPath, scale)
 
 
     def renderSetup(self):
         super(ManualRegistrationWidget, self).renderSetup()
         self.actor_moving.VisibilityOn()
         self.actor_moving.SetPosition(0,0,.1)
+        self.vtkWidget.ren.ResetCameraClippingRange()
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
         self.iren.AddObserver("StartInteractionEvent", self.interactionChange)
         self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
-        # self.iren.AddObserver("LeftButtonPressEvent", self.buttonEvent)
-        # self.iren.AddObserver("LeftButtonReleaseEvent", self.buttonEvent)
-        # self.iren.AddObserver("MiddleButtonPressEvent", self.buttonEvent)
-        # self.iren.AddObserver("MiddleButtonReleaseEvent", self.buttonEvent)
         self.iren.RemoveObservers("RightButtonPressEvent")#, self.buttonEvent)
         self.iren.RemoveObservers("RightButtonReleaseEvent")#, self.buttonEvent)
         self.iren.AddObserver("RightButtonPressEvent", self.interactionChange)
         self.iren.AddObserver("RightButtonReleaseEvent", self.interactionChange)
         self.iren.AddObserver("InteractionEvent", self.interactionEvent)
         self.iren.AddObserver("MouseMoveEvent", self.interactionEvent)
-    #     self.iren.AddObserver("KeyPressEvent", self.keypress)
+        # self.iren.Disable()
 
+    def publishPose(self):
+        pos = self.actor_moving.GetPosition()
+        rot = self.actor_moving.GetOrientationWXYZ()
+        w = (rot[0] / 180) * np.pi
+        sinW = np.sin(w / 2)
+        cosW = np.cos(w / 2)
+        self.marker.pose.position.x = pos[0]
+        self.marker.pose.position.y = pos[1]
+        self.marker.pose.position.z = pos[2]
+        self.marker.pose.orientation.x = rot[1] * sinW
+        self.marker.pose.orientation.y = rot[2] * sinW
+        self.marker.pose.orientation.z = rot[3] * sinW
+        self.marker.pose.orientation.w = cosW
+        print("Publishing: ", self)
+        self.posePub.publish(self.marker)
 
     # Handle the mouse button events.
     def interactionChange(self, obj, event):
@@ -57,8 +90,8 @@ class ManualRegistrationWidget(OverlayWidget):
         elif event == "EndInteractionEvent":
             self.interacting = False
             self.dolly = False
+        self.publishPose()
 
-    # General high-level logic
     def interactionEvent(self, obj, event):
         if self.dolly:
             lastX, lastY = self.iren.GetLastEventPosition()
@@ -77,138 +110,6 @@ class ManualRegistrationWidget(OverlayWidget):
         super(ManualRegistrationWidget, self).poseCallback(data)
         if self.isVisible():
             self.vtkWidget.ren.ResetCameraClippingRange()
-
-            # mat = vtktools.vtkMatrixtoNpMatrix(self.actor_moving.GetMatrix())
-            # print mat
-    #     ren = self.vtkWidget.ren
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     iren = self.iren
-
-    #     lastXYpos = iren.GetLastEventPosition()
-    #     lastX = lastXYpos[0]
-    #     lastY = lastXYpos[1]
-
-    #     xypos = iren.GetEventPosition()
-    #     x = xypos[0]
-    #     y = xypos[1]
-
-    #     center = renWin.GetSize()
-    #     centerX = center[0]/2.0
-    #     centerY = center[1]/2.0
-
-    #     if self.rotating:
-    #         self.rotate(ren, ren.GetActiveCamera(), x, y, lastX, lastY,
-    #                centerX, centerY)
-    #     elif self.panning:
-    #         self.pan(ren, ren.GetActiveCamera(), x, y, lastX, lastY, centerX,
-    #             centerY)
-    #     elif self.zooming:
-    #         self.dolly(ren, ren.GetActiveCamera(), x, y, lastX, lastY,
-    #               centerX, centerY)
-
-    # def keypress(self, obj, event):
-    #     key = obj.GetKeySym()
-    #     if key == "e":
-    #         obj.InvokeEvent("DeleteAllObjects")
-    #         sys.exit()
-    #     elif key == "w":
-    #         self.wireframe()
-    #     elif key =="s":
-    #         self.surface()
-
-
-    # # Routines that translate the events into camera motions.
-
-    # # This one is associated with the left mouse button. It translates x
-    # # and y relative motions into camera azimuth and elevation commands.
-    # def rotate(self, renderer, camera, x, y, lastX, lastY, centerX, centerY):
-    #     camera.Azimuth(lastX-x)
-    #     camera.Elevation(lastY-y)
-    #     camera.OrthogonalizeViewUp()
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     renWin.Render()
-
-
-    # # Pan translates x-y motion into translation of the focal point and
-    # # position.
-    # def pan(self, renderer, camera, x, y, lastX, lastY, centerX, centerY):
-    #     FPoint = camera.GetFocalPoint()
-    #     FPoint0 = FPoint[0]
-    #     FPoint1 = FPoint[1]
-    #     FPoint2 = FPoint[2]
-
-    #     PPoint = camera.GetPosition()
-    #     PPoint0 = PPoint[0]
-    #     PPoint1 = PPoint[1]
-    #     PPoint2 = PPoint[2]
-
-    #     renderer.SetWorldPoint(FPoint0, FPoint1, FPoint2, 1.0)
-    #     renderer.WorldToDisplay()
-    #     DPoint = renderer.GetDisplayPoint()
-    #     focalDepth = DPoint[2]
-
-    #     APoint0 = centerX+(x-lastX)
-    #     APoint1 = centerY+(y-lastY)
-
-    #     renderer.SetDisplayPoint(APoint0, APoint1, focalDepth)
-    #     renderer.DisplayToWorld()
-    #     RPoint = renderer.GetWorldPoint()
-    #     RPoint0 = RPoint[0]
-    #     RPoint1 = RPoint[1]
-    #     RPoint2 = RPoint[2]
-    #     RPoint3 = RPoint[3]
-
-    #     if RPoint3 != 0.0:
-    #         RPoint0 = RPoint0/RPoint3
-    #         RPoint1 = RPoint1/RPoint3
-    #         RPoint2 = RPoint2/RPoint3
-
-    #     camera.SetFocalPoint( (FPoint0-RPoint0)/2.0 + FPoint0,
-    #                           (FPoint1-RPoint1)/2.0 + FPoint1,
-    #                           (FPoint2-RPoint2)/2.0 + FPoint2)
-    #     camera.SetPosition( (FPoint0-RPoint0)/2.0 + PPoint0,
-    #                         (FPoint1-RPoint1)/2.0 + PPoint1,
-    #                         (FPoint2-RPoint2)/2.0 + PPoint2)
-
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     renWin.Render()
-
-
-    # # Dolly converts y-motion into a camera dolly commands.
-    # def dolly(self, renderer, camera, x, y, lastX, lastY, centerX, centerY):
-    #     dollyFactor = pow(1.02,(0.5*(y-lastY)))
-    #     if camera.GetParallelProjection():
-    #         parallelScale = camera.GetParallelScale()*dollyFactor
-    #         camera.SetParallelScale(parallelScale)
-    #     else:
-    #         camera.Dolly(dollyFactor)
-    #         renderer.ResetCameraClippingRange()
-
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     renWin.Render()
-
-    # # Wireframe sets the representation of all actors to wireframe.
-    # def wireframe(self):
-    #     actors = self.ren.GetActors()
-    #     actors.InitTraversal()
-    #     actor = actors.GetNextItem()
-    #     while actor:
-    #         actor.GetProperty().SetRepresentationToWireframe()
-    #         actor = actors.GetNextItem()
-
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     renWin.Render()
-
-    # # Surface sets the representation of all actors to surface.
-    # def surface(self):
-    #     actors = ren.GetActors()
-    #     actors.InitTraversal()
-    #     actor = actors.GetNextItem()
-    #     while actor:
-    #         actor.GetProperty().SetRepresentationToSurface()
-    #         actor = actors.GetNextItem()
-    #     renWin = self.vtkWidget.GetRenderWindow()
-    #     renWin.Render()
 
 if __name__ == "__main__":
     # App specific imports
@@ -230,5 +131,6 @@ if __name__ == "__main__":
                          slop = slop)
     windowL = ManualRegistrationWidget(cams.camL, texturePath, meshPath, scale=stlScale)
     windowL.show()
-    # windowR = OverlayWidget(cams.camR, meshPath, scale=stlScale, masterWidget=windowL)
+    windowR = ManualRegistrationWidget(cams.camR, texturePath, meshPath, masterWidget=windowL)
+    windowR.show()
     sys.exit(app.exec_())
