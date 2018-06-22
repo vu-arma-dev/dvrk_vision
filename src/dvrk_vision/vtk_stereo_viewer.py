@@ -3,6 +3,7 @@ import sys
 import cv2
 import vtk
 import vtktools
+import numpy as np
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
     _QT_VERSION = 5
     from PyQt5.QtCore import QObject, pyqtSignal
@@ -63,7 +64,14 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
         super(QVTKStereoViewer, self).__init__(parent, **kw)
         self.cam = camera
         self.setUp = False
+        self.shown = False
         self.aspectRatio = 1
+
+        # cb = vtktools.vtkTimerCallback(self._Iren, self)
+        # # cb.update = self.update
+        # self._Iren.AddObserver('TimerEvent', cb.execute)
+        # self._Iren.CreateRepeatingTimer(15)
+
 
     def start(self):
         self.cam.trigger.connect(self.imageCb)
@@ -74,30 +82,42 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
     def imageCb(self):
         if not self.setUp:
             image = self.cam.image
+            fgImage = np.dstack((image, np.zeros(image.shape[0:2], np.uint8)))
             self.aspectRatio = image.shape[1] / float(image.shape[0])
             # self.resize(self.width(), self.height())
             # Set up vtk camera using camera info
-            self.bgImage = vtktools.makeVtkImage(image.shape[0:2])
+            self.image = vtktools.makeVtkImage(image.shape)
+            self.fgImage = vtktools.makeVtkImage(fgImage.shape)
             renWin = self.GetRenderWindow()
             intrinsicMat, extrinsicMat = vtktools.matrixFromCamInfo(self.cam.info)
-            self.ren, bgRen = vtktools.setupRenWinForRegistration(renWin,
-                                                                  self.bgImage,
-                                                                  intrinsicMat)
-            size = self._RenderWindow.GetSize()
-            self._Iren.SetSize(size)
-            self._Iren.ConfigureEvent()
-            super(QVTKRenderWindowInteractor,self).resize(size[0], size[1])
+            self.ren, bgRen, fgRen = vtktools.setupRenWinForRegistration(renWin,
+                                                                         self.image,
+                                                                         self.fgImage,
+                                                                         intrinsicMat)
+
             pos = extrinsicMat[0:3,3]
             self.ren.GetActiveCamera().SetPosition(pos)
             pos[2] = 1
             self.ren.GetActiveCamera().SetFocalPoint(pos)
             self.renderSetup()
             self.setUp = True
+
         if self.isVisible():
-            image = self.imageProc(self.cam.image)
-            self.aspectRatio = image.shape[1] / float(image.shape[0])
-            vtktools.numpyToVtkImage(image,self.bgImage)
-            self.Render()
+            bgImage = self.imageProc(self.cam.image)
+            fgImage = np.dstack((bgImage, np.zeros(bgImage.shape[0:2], np.uint8)))
+            self.aspectRatio = bgImage.shape[1] / float(bgImage.shape[0])
+            vtktools.numpyToVtkImage(bgImage,self.image)
+            vtktools.numpyToVtkImage(fgImage,self.fgImage)
+            self._Iren.Render()
+
+    def showEvent(self, event):
+        if not self.shown:
+            size = self._RenderWindow.GetSize()
+            self._Iren.SetSize(size)
+            self._Iren.ConfigureEvent()
+            super(QVTKRenderWindowInteractor,self).resize(size[0], size[1])
+            self.shown = True
+        super(QVTKStereoViewer, self).showEvent(event)
 
     def imageProc(self, image):
         return image

@@ -47,9 +47,11 @@ def numpyToVtkImage(numpyData,VTKImageData):
         https://pyscience.wordpress.com/2014/09/06/numpy-to-vtk-converting-your-numpy-arrays-to-vtk-arrays-and-files/
         was extremely useful
     '''
-    if len(numpyData.shape)==3 and numpyData.shape[2] == 3:
+    if len(numpyData.shape)==3 and numpyData.shape[2] > 2 and numpyData.shape[2] <= 4:
         # Data from CV comes as BGR and vtkImageData displays as RGB so we convert
-        rgb = cv2.cvtColor(numpyData, cv2.COLOR_BGR2RGB)
+        # rgb = cv2.cvtColor(numpyData, cv2.COLOR_BGR2RGB)
+        rgb = numpyData
+        rgb[:,:,0:3] = cv2.cvtColor(numpyData[:,:,0:3], cv2.COLOR_BGR2RGB)
         # Get a vtkDataArray object containing numpy pixel data
         VTK_data = numpy_support.numpy_to_vtk(num_array=rgb[::-1].ravel(),
                                               deep=True, 
@@ -90,7 +92,7 @@ def actorFromStl(stlPath):
     actor.SetMapper(mapper)
     return actor
 
-def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
+def setupRenWinForRegistration(renWin, bgImage, fgImage, camIntrinsic):
     ''' Sets up the render window for registration in place
         Input:
             renWin (vtkRenderWindow): render window to set up with
@@ -103,9 +105,9 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     '''
 
 
-    renWin.SetNumberOfLayers(2)
+    renWin.SetNumberOfLayers(3)
 
-    # Create foreground renderer for stl object
+    # Create main renderer for stl object
     ren = vtk.vtkRenderer()
     ren.SetLayer(1)
     renWin.AddRenderer(ren)
@@ -126,9 +128,21 @@ def setupRenWinForRegistration(renWin,bgImage,camIntrinsic):
     backgroundRen.SetActiveCamera(bgCamera)
     # Add background renderer to window
     renWin.AddRenderer(backgroundRen)
+
+    # Create background renderer for static object
+    foregroundRen = vtk.vtkRenderer()
+    foregroundRen.SetLayer(2)
+    foregroundRen.InteractiveOff()
+    # Create background object for showing video feed.
+    fgCamera, foregroundActor = _makeImagePlane(fgImage)
+    # Setup camera
+    foregroundRen.AddActor(foregroundActor)
+    foregroundRen.SetActiveCamera(fgCamera)
+    # Add background renderer to window
+    renWin.AddRenderer(foregroundRen)
     
     # Way of getting camera: renWin.GetRenderers().GetFirstRenderer()
-    return ren, backgroundRen
+    return ren, backgroundRen, foregroundRen
 
 class QRosThread(QThread):
     # Qt thread designed to allow ROS to run in the background
@@ -147,11 +161,16 @@ class QRosThread(QThread):
 
 class vtkTimerCallback():
    # Callback that renders on a timer
-    def __init__(self, renWin):
+    def __init__(self, renWin, parent=None):
         self.renderWindows = [renWin]
+        self.parent = parent
     def execute(self,obj,event):
-        for renWin in self.renderWindows:
-            renWin.Render()
+        # for renWin in self.renderWindows:
+        #     if self.parent is None:
+        #         renWin.Render()
+        #     else:
+        #         if self.parent.isVisible():
+        #             renWin.Render()
         self.update()
     def addRenWin(self,renWin):
         self.renderWindows.append(renWin)
@@ -203,9 +222,9 @@ def _makeImagePlane(imageData) :
     '''
     imageActor = vtk.vtkImageActor()
 
-    if vtk.VTK_MAJOR_VERSION <= 5 :
+    if vtk.VTK_MAJOR_VERSION <= 5:
         imageActor.SetInput(imageData)
-    else :
+    else:
         imageActor.SetInputData(imageData)
 
     origin = imageData.GetOrigin()
