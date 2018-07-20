@@ -51,7 +51,7 @@ def matrixListToMultiarray(matrix):
     
     return msg
 
-class vtkTimerCallback():
+class vtkTimerCallback(object):
     def __init__(self, renWin):
         self.rate = rospy.Rate(30)
         self.renWin = renWin
@@ -72,7 +72,7 @@ def generateGrid(xmin, xmax, ymin, ymax, res):
 
     return grid
 
-class StiffnessToImageNode:
+class StiffnessToImageNode(object):
     def __init__(self, visualize=True):
         rospy.init_node('stiffness_to_image_converter', anonymous=True)
         self.domain = [0, 1, 0, 1]

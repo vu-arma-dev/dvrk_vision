@@ -6,7 +6,7 @@ from collections import namedtuple, deque
 import rostopic
 import message_filters
 
-class CameraSync:
+class CameraSync(object):
     # Variables to be shared across all TransformCameraSync objects
     _tfBuffer = tf2_ros.Buffer(cache_time=rospy.Duration(1))
     _listener = tf2_ros.TransformListener(_tfBuffer)
@@ -143,7 +143,7 @@ if __name__ == '__main__':
             continue
 
         transforms = tfSynch.getTransforms()
-
+        print(transforms)
         # transform = Transform(pose.position, pose.orientation)
         # transforms.append(TransformStamped(msgs[0].header, '', transform))
         for i in range(0,len(transforms)-1):

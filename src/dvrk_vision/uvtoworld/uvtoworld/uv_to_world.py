@@ -60,7 +60,7 @@ def makeTexturedObjData(objPath, scale=1):
     polyData = normalGenerator.GetOutput()
     return polyData
 
-class UVToWorldConverter:
+class UVToWorldConverter(object):
     """ This class is used to convert 2D texture coordinates to 3D object space.
 
     Args:
