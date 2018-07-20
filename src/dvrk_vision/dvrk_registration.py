@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import sys
-import os.path
 import yaml
 import rospy
 import cv2
@@ -15,6 +14,7 @@ from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Pose
 from tf_conversions import posemath
 from tf_sync import CameraSync
+import ipdb
 
 _WINDOW_NAME = "Registration"
 
@@ -204,16 +204,18 @@ def displayRegistration(cams, camModel, toolOffset, camearaTransform, tfSync, st
 
         rate.sleep()
 
-def getRegistrationPoints(robot, cams, camModel, toolOffset, tfSync):
+def getRegistrationPoints(points, robot, cams, camModel, toolOffset, tfSync):
     rate = rospy.Rate(15) # 15hz
-    points = np.array([[ 0.10, 0.00,-0.15],
-                       [ 0.05, 0.10,-0.18], 
-                       [-0.04, 0.13,-0.15], 
-                       [ 0.05, 0.05,-0.18], 
-                       [-0.05,-0.02,-0.15]])
+    # points = np.array([[ 0.10, 0.00,-0.15],
+    #                    [ 0.05, 0.10,-0.18], 
+    #                    [-0.04, 0.13,-0.15], 
+    #                    [ 0.05, 0.05,-0.18], 
+    #                    [-0.05,-0.02,-0.15]])
+
     print points
     pointsCam = np.empty(points.shape)
     for i, point in enumerate(points):
+        b_stopMotion = True
         if rospy.is_shutdown():
             quit()
         if not robot.move(PyKDL.Vector(point[0], point[1], point[2])):
@@ -228,7 +230,7 @@ def getRegistrationPoints(robot, cams, camModel, toolOffset, tfSync):
         offset = offset * toolOffset
         startTime = rospy.get_time()
 
-        while rospy.get_time() - startTime < 1:
+        while rospy.get_time() - startTime < 2 or b_stopMotion:
             # Get last images
             imageL = cams.camL.image
             imageR = cams.camR.image
@@ -240,6 +242,8 @@ def getRegistrationPoints(robot, cams, camModel, toolOffset, tfSync):
                 if key == 27: 
                     cv2.destroyAllWindows()
                     quit()
+                elif (chr(key%256) == 's' or chr(key%256) == 'S'):
+                    b_stopMotion = False
             rate.sleep()
             if point3d != None:
                 pBuffer.append(point3d)
@@ -268,7 +272,6 @@ def calculateRegistration(points, pointsCam):
 def main(psmName):
     rospy.init_node('dvrk_registration', anonymous=True)
     robot = psm(psmName)
-    toolOffset = .012 # distance from pinching axle to center of orange nub
    
     frameRate = 15
     slop = 1.0 / frameRate
@@ -292,9 +295,7 @@ def main(psmName):
     camModel.fromCameraInfo(msgL,msgR)
 
     # Set up GUI
-    scriptDirectory = os.path.dirname(os.path.abspath(__file__))
-    filePath = os.path.join(scriptDirectory, '..', '..', 'defaults', 
-                            'registration_params.yaml')
+    filePath = rospy.get_param('~registration_yaml')
     print(filePath)
     with open(filePath, 'r') as f:
         data = yaml.load(f)
@@ -305,7 +306,8 @@ def main(psmName):
                  'minS': 173,
                  'minV': 68,
                  'maxV': 255,
-                 'transform':np.eye(4).tolist() }
+                 'transform': np.eye(4).tolist(),
+                 'toolOffset': 0.012 }
 
     cv2.namedWindow(_WINDOW_NAME)
     cv2.createTrackbar('H', _WINDOW_NAME, data['H'], 180, nothingCB)
@@ -316,11 +318,14 @@ def main(psmName):
 
     transformOld = np.array(data['transform'])
 
+    toolOffset = data['toolOffset'] # distance from pinching axle to center of orange nub
+    points = np.array(data['points']) # Set of points in robots frame to register against
+
     # Wait for registration to start
     displayRegistration(cams, camModel, toolOffset, transformOld, tfSync)
     
     # Main registration
-    (pointsA, pointsB) = getRegistrationPoints(robot, cams, camModel, toolOffset, tfSync)
+    (pointsA, pointsB) = getRegistrationPoints(points, robot, cams, camModel, toolOffset, tfSync)
     tf = calculateRegistration(pointsA, pointsB)
     
 

@@ -13,6 +13,7 @@ import vtk
 import cv2
 from dvrk_vision.clean_resource_path import cleanResourcePath
 import dvrk_vision.uvtoworld as uvtoworld
+import yaml
 
 ## Take a Float64 MultiArray message, convert it into a numpyMatrix
 def multiArrayToMatrixList(ma_msg):
@@ -88,10 +89,10 @@ class StiffnessToImageNode:
         self.stiffness = np.empty(0)
         self.points2D = np.empty((0,3))
 
-        # Organ stuff
-        meshPath = "package://oct_15_demo/resources/largeProstate.obj"
-        texturePath = "package://oct_15_demo/resources/largeProstate.png"
-        scale = 1000.06
+        meshPath = rospy.get_param("~mesh_path")
+        scale = rospy.get_param("~mesh_scale")
+        texturePath = rospy.get_param("~texture_path")
+
         # Read in STL
         meshPath = cleanResourcePath(meshPath)
         extension = os.path.splitext(meshPath)[1]
@@ -102,11 +103,19 @@ class StiffnessToImageNode:
         else:
             ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
         meshReader.SetFileName(meshPath)
+
+        filePath = rospy.get_param('~registration_yaml')
+        print(filePath)
+        with open(filePath, 'r') as f:
+            data = yaml.load(f)
+        pos = data['position']
+        rot = data['quaternion']
+
         # Scale STL
         transform = vtk.vtkTransform()
         transform.Scale(scale, scale, scale)
-        transform.Translate(0,.015,-.142)
-        transform.RotateX(110)
+        transform.RotateWXYZ(rot[1], rot[2], rot[3], rot[0])
+        transform.Translate(pos[0],pos[1], pos[2])
         transformFilter = vtk.vtkTransformFilter()
         transformFilter.SetTransform(transform)
         transformFilter.SetInputConnection(meshReader.GetOutputPort())
@@ -205,6 +214,17 @@ class StiffnessToImageNode:
         pointsOld = np.setand1d(pointsNewB, pointsOldB)
         pointsOld = np.array([np.frombuffer(a, count=3) for a in pointsOld])
         return pointsNew, pointsOld
+
+    def poseCallback(self, data):
+        pos = data.pose.position
+        rot = data.pose.orientation
+        mat = transformations.quaternion_matrix([rot.x,rot.y,rot.z,rot.w])
+        mat[0:3,3] = [pos.x,pos.y,pos.z]
+        transform = vtk.vtkTransform()
+        transform.SetMatrix(mat.ravel())
+        # self.actor_moving.SetPosition(transform.GetPosition())
+        # self.actor_moving.SetOrientation(transform.GetOrientation())
+        # self.actor_moving.VisibilityOn()
 
     def update(self):
         if len(self.points) != len(self.stiffness):

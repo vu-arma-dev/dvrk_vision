@@ -26,6 +26,7 @@
   <arg name="texture_path" default="package://dvrk_vision/defaults/OrganA.jpg"/>
   <arg name="scale" default=".95" />
   <arg name="inlier_ratio" default=".5"/>
+  <arg name="registration" default="$(find dvrk_vision)/defaults/PSM2PhantomReg_UserStudy.yaml" />
 
 <!--   <arg name="mesh_path" default="package://oct_15_demo/resources/smallProstate.obj" />
   <arg name="secondary_mesh_path" default="package://oct_15_demo/resources/smallProstateAnnotated.obj" />
@@ -62,23 +63,30 @@
     <param name="approximate_sync" value="true" />
   </node>
   
-  <node ns="stereo" name="main_gui" type="main_gui.py" pkg="oct_15_demo" output="screen" clear_params="true" required="true">
+<!--   <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="mesh_path" value="$(arg mesh_path)"/>
     <param name="mesh_scale" value="$(arg scale)"/>
     <param name="texture_path" value="$(arg texture_path)"/>
-  </node> 
+  </node> -->
+
+  <node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+    <param name="mesh_path" value="$(arg mesh_path)"/>
+    <param name="mesh_scale" value="$(arg scale)"/>
+    <param name="texture_path" value="$(arg texture_path)"/>
+    <param name="registration_yaml" value="$(arg registration)" />
+  </node>
 
 <!--   <node ns="stereo" name="registraion" type="vtk_stereo_viewer.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="mesh_path" value="$(arg mesh_path)"/>
     <param name="mesh_scale" value="$(arg scale)"/>
     <param name="texture_path" value="$(arg texture_path)"/>
   </node> -->
-
+<!--
   <node ns="stereo" name="bingham_registration" type="registration_node" pkg="bingham_registration" output="screen">
     <param name="mesh_path" value="$(arg mesh_path)"/>
     <param name="mesh_scale" value="$(arg scale)"/>
     <param name="inlier_ratio" value="$(arg inlier_ratio)"/>
     <remap from="point_cloud" to="points2"/>
   </node>
-  
+-->
 </launch>
