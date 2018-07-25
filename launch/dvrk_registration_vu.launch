@@ -1,0 +1,18 @@
+<launch>
+  <arg name="arm" default="PSM2" />
+  <include file="$(find dvrk_vision)/launch/just_cams.launch">
+  	<arg name="camera_parent" default="$(arg arm)_psm_base_link"/>
+  </include>
+
+  <node name="dvrk_jconsole"
+  		pkg="dvrk_robot" 
+  		type="dvrk_console_json" 
+	  	args="-j /home/arma/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/vu-dVRK/console-PSM2.json"
+	  	output="screen"/>
+
+
+  <node ns="stereo" pkg="dvrk_vision" type="dvrk_registration.py"
+  		name="registration" output="screen" required="true"/>
+  		
+
+</launch>
