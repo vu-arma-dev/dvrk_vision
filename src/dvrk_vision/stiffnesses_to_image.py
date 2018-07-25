@@ -73,6 +73,7 @@ def generateGrid(xmin, xmax, ymin, ymax, res):
     return grid
 
 class StiffnessToImageNode(object):
+    bridge = CvBridge()
     def __init__(self, visualize=True):
         rospy.init_node('stiffness_to_image_converter', anonymous=True)
         self.domain = [0, 1, 0, 1]
@@ -261,6 +262,10 @@ class StiffnessToImageNode(object):
         img = self.texture.copy()
         img = np.subtract(img, stiffImg.astype(int))
         img = np.clip(img, 0, 255).astype(np.uint8)
+
+        msg = self.bridge.cv2_to_imgmsg(image, 'rgb8')
+        self.imagePub.publish(msg)
+
         self.oldPoints = self.points
 
         if self.visualize:
