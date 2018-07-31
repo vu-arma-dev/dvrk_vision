@@ -13,6 +13,7 @@ import vtk
 import cv2
 from dvrk_vision.clean_resource_path import cleanResourcePath
 import dvrk_vision.uvtoworld as uvtoworld
+from cv_bridge import CvBridge, CvBridgeError
 import yaml
 
 ## Take a Float64 MultiArray message, convert it into a numpyMatrix
