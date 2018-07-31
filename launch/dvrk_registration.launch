@@ -1,6 +1,6 @@
 <launch>
-  <arg name="arm" default="PSM2" />
-  <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params.yaml" />
+  <arg name="arm"/>
+  <arg name="yaml"/>
   <include file="$(find dvrk_vision)/launch/just_cams.launch">
   	<arg name="camera_parent" default="$(arg arm)_psm_base_link"/>
   </include>

@@ -14,7 +14,6 @@ from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Pose
 from tf_conversions import posemath
 from tf_sync import CameraSync
-import ipdb
 
 _WINDOW_NAME = "Registration"
 
@@ -206,16 +205,11 @@ def displayRegistration(cams, camModel, toolOffset, camearaTransform, tfSync, st
 
 def getRegistrationPoints(points, robot, cams, camModel, toolOffset, tfSync):
     rate = rospy.Rate(15) # 15hz
-    # points = np.array([[ 0.10, 0.00,-0.15],
-    #                    [ 0.05, 0.10,-0.18], 
-    #                    [-0.04, 0.13,-0.15], 
-    #                    [ 0.05, 0.05,-0.18], 
-    #                    [-0.05,-0.02,-0.15]])
 
     print points
     pointsCam = np.empty(points.shape)
     for i, point in enumerate(points):
-        b_stopMotion = True
+        b_stopMotion = False
         if rospy.is_shutdown():
             quit()
         if not robot.move(PyKDL.Vector(point[0], point[1], point[2])):
@@ -299,15 +293,11 @@ def main(psmName):
     print(filePath)
     with open(filePath, 'r') as f:
         data = yaml.load(f)
-    if 'H' not in data:
-        rospy.logwarn('dVRK Registration: defaults/registration_params.yaml \
-                       empty or malformed. Using defaults for orange tip')
-        data = { 'H': 23,
-                 'minS': 173,
-                 'minV': 68,
-                 'maxV': 255,
-                 'transform': np.eye(4).tolist(),
-                 'toolOffset': 0.012 }
+    if any (k not in data for k in ['H', 'minS', 'minV', 'maxV', 'transform', 'points']):
+
+        rospy.logfatal('dVRK Registration: ' + filePath +
+                       ' empty or malformed.')
+        quit()
 
     cv2.namedWindow(_WINDOW_NAME)
     cv2.createTrackbar('H', _WINDOW_NAME, data['H'], 180, nothingCB)
