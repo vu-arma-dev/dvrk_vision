@@ -50,7 +50,7 @@ def numpyToVtkImage(numpyData,VTKImageData):
     if len(numpyData.shape)==3 and numpyData.shape[2] > 2 and numpyData.shape[2] <= 4:
         # Data from CV comes as BGR and vtkImageData displays as RGB so we convert
         # rgb = cv2.cvtColor(numpyData, cv2.COLOR_BGR2RGB)
-        rgb = numpyData
+        rgb = numpyData.copy()
         rgb[:,:,0:3] = cv2.cvtColor(numpyData[:,:,0:3], cv2.COLOR_BGR2RGB)
         # Get a vtkDataArray object containing numpy pixel data
         VTK_data = numpy_support.numpy_to_vtk(num_array=rgb[::-1].ravel(),

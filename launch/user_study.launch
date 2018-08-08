@@ -19,12 +19,12 @@
     <arg name="hue" default="-180" />
   </include>
   
-<!--   <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
-    <param name="mesh_path" value="$(arg mesh_path)"/>
-    <param name="mesh_scale" value="$(arg scale)"/>
-    <param name="texture_path" value="$(arg texture_path)"/>
+  <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="camera_registration" value="$(arg camera_registration)" />
-  </node> -->
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom" />
+    <param name="robot_frame" value="$(arg slave)_SIM_psm_base_link"/>
+    <param name="camera_frame" value="stereo_camera_frame"/>
+  </node>
 
 
 <!--   <node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">

@@ -11,6 +11,8 @@ else:
     _QT_VERSION = 4
 # General imports
 import numpy as np
+import scipy.interpolate
+import cv2
 import os
 # Ros specific
 import rospy
@@ -24,6 +26,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from dvrk_vision.overlay_gui import vtkRosTextureActor
 from dvrk_vision.vtk_stereo_viewer import QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
+from dvrk_vision import uvtoworld
 
 class vtkTimerCallback(object):
     def __init__(self, renWin):
@@ -100,6 +103,14 @@ def loadMesh(path, scale):
     transformFilter.Update()
     return transformFilter.GetOutput()
 
+def generateGrid(xmin, xmax, ymin, ymax, res):
+    x = np.linspace(xmin, xmax, res)
+    y = np.linspace(ymin, ymax, res)
+    Xg,Yg = np.meshgrid(x,y)
+    grid = np.array([Xg.flatten(), Yg.flatten()]).T
+
+    return grid
+
 class GpOverlayWidget(QWidget):
     bridge = CvBridge()
     tfBuffer = tf2_ros.Buffer()
@@ -124,7 +135,7 @@ class GpOverlayWidget(QWidget):
         self.vtkFrame.setLayout(self.vl)
 
         self.otherWindows = []
-        if type(self.masterWidget) != type(None):
+        if self.masterWidget is not None:
             self.masterWidget.otherWindows.append(self)
             self.otherWindows.append(self.masterWidget)
 
@@ -135,6 +146,7 @@ class GpOverlayWidget(QWidget):
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
 
+        self.textureCheckBox.setText("Show GP mesh")
 
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
@@ -147,14 +159,21 @@ class GpOverlayWidget(QWidget):
             window.opacitySlider.setValue(self.opacitySlider.value())
 
     def checkBoxChanged(self):
-        self.actorOrgan.textureOnOff(self.textureCheckBox.isChecked())
-        self.actorOrgan.GetProperty().LightingOn()
+        if(self.textureCheckBox.isChecked()):
+            self.gpActor.VisibilityOn()
+        else:
+            self.gpActor.VisibilityOff()
+        # self.actorOrgan.textureOnOff(self.textureCheckBox.isChecked())
+        # self.actorOrgan.GetProperty().LightingOn()
         for window in self.otherWindows:
             window.textureCheckBox.setChecked(self.textureCheckBox.isChecked())
 
     def renderSetup(self):
-        if type(self.masterWidget) != type(None):
+        if self.masterWidget is not None:
             self.actorOrgan = self.masterWidget.actorOrgan
+            self.gpActor = self.masterWidget.gpActor
+            self.vtkWidget.ren.AddActor(self.actorOrgan)
+            self.vtkWidget.ren.AddActor(self.gpActor)
             return
 
         # Empty variables for organ data
@@ -179,15 +198,15 @@ class GpOverlayWidget(QWidget):
         #     mapper.SetInput(self.polyData)
         # else:
         #     mapper.SetInputData(self.polyData)
-        gpActor = vtk.vtkActor()
-        gpActor.SetMapper(gpMapper)
-        gpActor.GetProperty().SetDiffuse(0)
-        gpActor.GetProperty().SetSpecular(0)
-        gpActor.GetProperty().SetAmbient(1)
+        self.gpActor = vtk.vtkActor()
+        self.gpActor.SetMapper(gpMapper)
+        self.gpActor.GetProperty().SetDiffuse(0)
+        self.gpActor.GetProperty().SetSpecular(0)
+        self.gpActor.GetProperty().SetAmbient(1)
 
         # Set up subscriber for marker
         self.meshPath = ""
-        markerSub = message_filters.Subscriber(markerTopic, Marker)
+        markerSub = message_filters.Subscriber(self.markerTopic, Marker)
         markerSub.registerCallback(self.markerCB)
 
         # Set up subscribers for GP
@@ -209,7 +228,7 @@ class GpOverlayWidget(QWidget):
 
         # Add actors
         self.vtkWidget.ren.AddActor(self.actorOrgan)
-        self.vtkWidget.ren.AddActor(gpActor)
+        self.vtkWidget.ren.AddActor(self.gpActor)
 
         # Set up timer callback
         cb = vtkTimerCallback(self.vtkWidget._RenderWindow)
@@ -268,7 +287,11 @@ class GpOverlayWidget(QWidget):
             transformFilter.SetInputData(polydata)
             transformFilter.Update()
 
-            self._updateActorPolydata(self.actorOrgan, transformFilter.GetOutput())
+            organPolyData = transformFilter.GetOutput()
+            self._updateActorPolydata(self.actorOrgan, organPolyData)
+            if self.converter != None:
+                del(self.converter)
+            self.converter = uvtoworld.UVToWorldConverter(organPolyData)
 
             # self.actorOrgan.SetPosition(transformCam.GetPosition())
             # self.actorOrgan.SetOrientation(transformCam.GetOrientation())
@@ -282,6 +305,10 @@ class GpOverlayWidget(QWidget):
         self.stiffness = multiArrayToMatrixList(stiffness).transpose()
 
     def update(self):
+        if not self.isVisible():
+            return
+        self.gpActor.SetPosition(self.actorOrgan.GetPosition())
+        self.gpActor.SetOrientation(self.actorOrgan.GetOrientation())
         if len(self.points) != len(self.stiffness) or self.meshPath == "":
             return
         if np.all(self.points == self.oldPoints):
@@ -327,6 +354,39 @@ class GpOverlayWidget(QWidget):
         self.gpPolyData.Modified()
         if colored:
             self.gpPolyData.GetPointData().SetScalars(colors)
+
+        if self.converter == None:
+            return   
+        # Project points into UV space        
+        texCoords = self.converter.toUVSpace(points)[:, 0:2]
+        # Flip y coordinates to match image space
+        texCoords[:,1] *= -1
+        texCoords[:,1] +=  1
+
+        resolution = 100
+        grid = generateGrid(0, 1, 0, 1, resolution)
+        stiffMap = scipy.interpolate.griddata(texCoords, scalars, grid, method="linear", fill_value=-1)
+        stiffMap = stiffMap.reshape(resolution, resolution)
+        stiffMap[stiffMap == -1] = np.min(stiffMap[stiffMap != -1])
+        # print(np.min(stiffMap), np.max(stiffMap), np.min(stiffMat), np.max(stiffMat))
+        # Normalize
+        # stiffMap[stiffMap < np.mean(stiffMap)] = np.mean(stiffMap)
+        stiffMap -= np.min(stiffMap)
+        stiffMap /= np.max(stiffMap)
+        scale = 255 * 0.3
+        r = np.clip(stiffMap * 3, 0, 1) * scale
+        g = np.clip(stiffMap * 3 - 1, 0, 1) * scale
+        b = np.clip(stiffMap * 3 - 2, 0, 1) * scale
+        stiffImg = np.dstack((b, g, r)).astype(np.uint8)
+        shape = self.texture.shape
+        stiffImg = cv2.resize(stiffImg, (shape[1], shape[0]))
+        img = self.texture.copy()
+        img = np.subtract(img, stiffImg.astype(int))
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        self.actorOrgan.setTexture(img)
+        self.actorOrgan.textureOnOff(True)
+        self.actorOrgan.GetProperty().LightingOn()
+
 
 if __name__ == '__main__':
     import sys

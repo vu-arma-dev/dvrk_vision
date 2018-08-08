@@ -44,16 +44,32 @@ class ForceOverlayWidget(QVTKStereoViewer):
     def __init__(self, cam, camTransform, dvrkName, forceTopic, draw="bar", masterWidget=None, parent=None):
         super(ForceOverlayWidget, self).__init__(cam, parent=parent)
         self.masterWidget = masterWidget
-        if self.masterWidget == None:
-            self.robot = psm(dvrkName)
-        else:
-            self.robot = self.masterWidget.robot
-        self.cameraTransform = camTransform
+        self.cameraTransform = arrayToPyKDLFrame(camTransform)
         self.drawType = draw
-        rospy.Subscriber(forceTopic, WrenchStamped, self.forceCB)
+        if self.masterWidget is None:
+            self.robot = psm(dvrkName)
+            rospy.Subscriber(forceTopic, WrenchStamped, self.forceCB)
+
+        
 
     def renderSetup(self):
+        # Setup interactor
+        self.iren = self.GetRenderWindow().GetInteractor()
+        self.iren.RemoveObservers('LeftButtonPressEvent')
+        self.iren.RemoveObservers('LeftButtonReleaseEvent')
+        self.iren.RemoveObservers('MouseMoveEvent')
+        self.iren.RemoveObservers('MiddleButtonPressEvent')
+        self.iren.RemoveObservers('MiddleButtonPressEvent')
+        self.currentForce = [0,0,0]
+
         if self.drawType == "arrow":
+            if self.masterWidget is not None:
+                print("HELLO MASTER")
+                self.arrowActor = self.masterWidget.arrowActor
+                self.targetActor = self.masterWidget.targetActor
+                self.ren.AddActor(self.arrowActor)
+                self.ren.AddActor(self.targetActor)
+                return
             arrowSource = vtk.vtkArrowSource()
             mapper = vtk.vtkPolyDataMapper()
             if vtk.VTK_MAJOR_VERSION <= 5:
@@ -69,6 +85,14 @@ class ForceOverlayWidget(QVTKStereoViewer):
             self.ren.AddActor(self.targetActor)
 
         elif self.drawType == "bar":
+            if self.masterWidget is not None:
+                self.bar = self.masterWidget.bar
+                self.forceBar = self.masterWidget.forceBar
+                self.greenLine = self.masterWidget.greenLine
+                self.ren.AddActor(self.bar)
+                self.ren.AddActor(self.forceBar)
+                self.ren.AddActor(self.greenLine)
+                return
             # Make two color bars to show current force
             source = vtk.vtkCubeSource()
             source.SetBounds((-.002, .002, 0, .05, 0, .001))
@@ -99,25 +123,18 @@ class ForceOverlayWidget(QVTKStereoViewer):
             self.greenLine.GetProperty().SetColor(.9,.9,.9)
             self.greenLine.GetProperty().LightingOff()
             self.ren.AddActor(self.greenLine)
-
-        # Setup interactor
-        self.iren = self.GetRenderWindow().GetInteractor()
-        self.iren.RemoveObservers('LeftButtonPressEvent')
-        self.iren.RemoveObservers('LeftButtonReleaseEvent')
-        self.iren.RemoveObservers('MouseMoveEvent')
-        self.iren.RemoveObservers('MiddleButtonPressEvent')
-        self.iren.RemoveObservers('MiddleButtonPressEvent')
-        self.currentForce
     
     def forceCB(self, data):
         self.currentForce = [data.wrench.force.x, data.wrench.force.y, data.wrench.force.z]
 
     def imageProc(self,image):
+        if self.masterWidget is not None:
+            return image
         # Get current force
         force = self.currentForce
         force = np.linalg.norm(force)
-        targetF = 4 # Newtons
-        targetR = 1 # Newtons
+        targetF = 2 # Newtons
+        targetR = 2 # Newtons
         # Calculate color
         xp = [targetF-targetR, targetF, targetF+targetR]
         fp = [0, 1, 0]
@@ -153,7 +170,6 @@ class ForceOverlayWidget(QVTKStereoViewer):
             # Scale color bar
             fp2 = [0, .5, 1]
             scalePos = np.interp(force, xp, fp2)
-            print scalePos
             posMat[1,0:3] = posMat[1,0:3] * scalePos
             setActorMatrix(self.forceBar, posMat)
 
@@ -181,7 +197,7 @@ if __name__ == "__main__":
     yamlFile = cleanResourcePath("package://dvrk_vision/defaults/registration_params.yaml")
     with open(yamlFile, 'r') as stream:
         data = yaml.load(stream)
-    cameraTransform = arrayToPyKDLFrame(data['transform'])
+    cameraTransform = data['transform']
 
     rosThread = vtktools.QRosThread()
     rosThread.start()

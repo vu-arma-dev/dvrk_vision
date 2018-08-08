@@ -9,7 +9,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 import message_filters
 import matplotlib.pyplot as plt
-import scipy
+import scipy.interpolate
 import vtk
 import cv2
 from dvrk_vision.clean_resource_path import cleanResourcePath
