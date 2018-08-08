@@ -1,42 +1,14 @@
 <launch>
-  <!--<arg name="mesh_path" default="package://dvrk_vision/defaults/pelvis.obj" />
-  <arg name="scale" default=".000975" />
-  <arg name="texture_path" default="package://oct_15_demo/resources/DiffuseHills.png"/>
-  <arg name="inlier_ratio" default=".8"/> -->
-
-  <!-- <arg name="mesh_path" default="package://oct_15_demo/resources/SquareOrgan.obj" /> -->
-<!--   <arg name="secondary_mesh_path" default="package://oct_15_demo/resources/HillOrganAnnotated.obj" /> -->
-<!--   <arg name="texture_path" default="package://oct_15_demo/resources/DiffuseHills.png"/>
-  <arg name="scale" default=".98"/>
-  <arg name="inlier_ratio" default=".9"/> -->
-
-<!--   <arg name="mesh_path" default="package://oct_15_demo/resources/largeProstate.obj" />
-  <arg name="secondary_mesh_path" default="package://oct_15_demo/resources/largeProstateAnnotated.obj" />
-  <arg name="texture_path" default="package://oct_15_demo/resources/largeProstate.png"/>
-  <arg name="scale" default="1.08" />
-  <arg name="inlier_ratio" default=".8"/>  -->
-
-<!--   <arg name="mesh_path" default="package://dvrk_vision/defaults/bunny.obj" />
-  <arg name="secondary_mesh_path" default="package://dvrk_vision/defaults/bunny.obj" />
-  <arg name="texture_path" default="package://dvrk_vision/defaults/bunny_diffuse.png"/>
-  <arg name="scale" default=".102" /> 
-  <arg name="inlier_ratio" default=".8"/>  -->
-
-  <arg name="mesh_path" default="package://dvrk_vision/defaults/OrganA.obj" />
-  <arg name="texture_path" default="package://dvrk_vision/defaults/OrganA.jpg"/>
+  <arg name="namespace" default="/dvrk/"/>
+  <arg name="master" default="MTMR"/>   
+  <arg name="slave" default="PSM2"/>   
+  <arg name="nri_config" default="$(find dvrk_nri_robot)/config/cmu-dVRK/nri-console-$(arg master)-$(arg slave)-Teleop.json"/>
   <arg name="scale" default=".95" />
-  <arg name="inlier_ratio" default=".5"/>
-  <arg name="registration" default="$(find dvrk_vision)/defaults/PSM2PhantomReg_UserStudy.yaml" />
-  <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params.yaml" />
+  <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
-<!--   <arg name="mesh_path" default="package://oct_15_demo/resources/smallProstate.obj" />
-  <arg name="secondary_mesh_path" default="package://oct_15_demo/resources/smallProstateAnnotated.obj" />
-  <arg name="texture_path" default="package://oct_15_demo/resources/smallProstate.png"/>
-  <arg name="scale" default="1.2" />
-  <arg name="inlier_ratio" default=".8"/> -->
-
-  <include file="$(find dvrk_vision)/launch/just_cams.launch">
-    <arg name="camera_parent" default="PSM2_psm_base_link"/>
+   <include file="$(find dvrk_vision)/launch/just_cams.launch">
+    <arg name="transform_yaml" default="$(arg camera_registration)"/>
+    <arg name="camera_parent" default="PSM2_SIM_psm_base_link"/>
     <arg name="skip_frames" default="2"/>
     <arg name="exposure" default="40" />
     <arg name="white_balance" default="4800" />
@@ -46,49 +18,20 @@
     <arg name="brightness" default="0" />
     <arg name="hue" default="-180" />
   </include>
-
-  <node ns="stereo" pkg="nodelet" type="nodelet" name="disparity"
-        args="load stereo_image_proc/disparity standalone_nodelet"
-        output="screen">
-    <param name="queue_size" value="3" />
-    <param name="approximate_sync" value="true" />
-  </node>
-
-  <node name="dynamic_reconfigure_load" pkg="dynamic_reconfigure" type="dynparam" args="load /stereo/disparity $(find dvrk_vision)/defaults/stereo_processing.yaml" />
-
-  <node ns="stereo" pkg="nodelet" type="nodelet" name="point_cloud"
-        args="load dvrk_vision/point_cloud2 standalone_nodelet">
-    <param name="queue_size" value="3" />
-    <remap from="left/image_rect_color" to="left/image_rect"/>
-    <remap from="right/image_rect_color" to="right/image_rect"/>
-    <param name="approximate_sync" value="true" />
-  </node>
   
-  <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+<!--   <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="mesh_path" value="$(arg mesh_path)"/>
     <param name="mesh_scale" value="$(arg scale)"/>
     <param name="texture_path" value="$(arg texture_path)"/>
     <param name="camera_registration" value="$(arg camera_registration)" />
-  </node>
-
-  <!--<node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
-    <param name="mesh_path" value="$(arg mesh_path)"/>
-    <param name="mesh_scale" value="$(arg scale)"/>
-    <param name="texture_path" value="$(arg texture_path)"/>
-    <param name="registration_yaml" value="$(arg registration)" />
-  </node>-->
-
-<!--   <node ns="stereo" name="registraion" type="vtk_stereo_viewer.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
-    <param name="mesh_path" value="$(arg mesh_path)"/>
-    <param name="mesh_scale" value="$(arg scale)"/>
-    <param name="texture_path" value="$(arg texture_path)"/>
   </node> -->
-<!--
-  <node ns="stereo" name="bingham_registration" type="registration_node" pkg="bingham_registration" output="screen">
-    <param name="mesh_path" value="$(arg mesh_path)"/>
-    <param name="mesh_scale" value="$(arg scale)"/>
-    <param name="inlier_ratio" value="$(arg inlier_ratio)"/>
-    <remap from="point_cloud" to="points2"/>
-  </node>
--->
+
+
+<!--   <node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom"/>
+    <param name="robot_frame" value="/$(arg slave)_SIM_psm_base_link"/>
+    <param name="marker_scale" value="$(arg scale)"/>
+    <param name="camera_registration" value="$(arg camera_registration)" />
+  </node> -->
+
 </launch>
