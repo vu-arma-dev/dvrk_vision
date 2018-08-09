@@ -52,7 +52,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                         masterWidget = gpParent,
                                         parent = self)
     
-        self.tabWidget.addTab(self.gpWidget, "Force Bar Overlay")
+        self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
 
         self.forceOverlay.Initialize()
         self.forceOverlay.start()
@@ -64,6 +64,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tabWidget.currentChanged.connect(self.tabChanged)
 
+        self.widgets = {"Force Bar Overlay": self.forceOverlay,
+                        "Stiffness Overlay": self.gpWidget}
+        
+
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
         for window in self.otherWindows:
@@ -73,6 +77,16 @@ class MainWindow(QtWidgets.QMainWindow):
         for window in self.otherWindows:
             window.close()
         self.close()
+
+    def hideButtons(self):
+        self.tabWidget.tabBar().hide()
+        self.gpWidget.opacitySlider.hide()
+        self.gpWidget.textureCheckBox.hide()
+
+    def showButtons(self):
+        self.tabWidget.tabBar().show()
+        self.gpWidget.opacitySlider.show()
+        self.gpWidget.textureCheckBox.show()
 
 if __name__ == "__main__":
     from tf import transformations
