@@ -309,6 +309,8 @@ class GpOverlayWidget(QWidget):
             return
         self.gpActor.SetPosition(self.actorOrgan.GetPosition())
         self.gpActor.SetOrientation(self.actorOrgan.GetOrientation())
+        if len(self.points) == 0:
+            return
         if len(self.points) != len(self.stiffness) or self.meshPath == "":
             return
         if np.all(self.points == self.oldPoints):
