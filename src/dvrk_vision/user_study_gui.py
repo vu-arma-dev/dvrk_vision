@@ -8,7 +8,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
 import dvrk_vision.vtktools as vtktools
 from dvrk_vision.force_overlay import ForceOverlayWidget
-from dvrk_vision.stiffnesses_to_image_gui import GpOverlayWidget
+from dvrk_vision.gp_overlay_gui import GpOverlayWidget
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
 
 class MainWindow(QtWidgets.QMainWindow):
