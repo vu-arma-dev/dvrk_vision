@@ -113,7 +113,7 @@ def generateRandomPoint(xMinMax, yMinMax, zMinMax):
         randomPoint[idx] = r * (minMax[1] - minMax[0]) + minMax[0]
     return randomPoint
 
-def displayRegistration(cams, camModel, toolOffset, camearaTransform, tfSync, started=False):
+def displayRegistration(cams, camModel, toolOffset, camTransform, tfSync, started=False, affine=None):
     rate = rospy.Rate(15) # 15hz
     while not rospy.is_shutdown():
         # Get last images
@@ -141,7 +141,10 @@ def displayRegistration(cams, camModel, toolOffset, camearaTransform, tfSync, st
         offset = offset * toolOffset
         pos = np.matrix([pVector.x(), pVector.y(), pVector.z(), 1]) + offset;
         pos = pos.transpose()
-        pos = np.linalg.inv(camearaTransform) * pos
+        if affine is None:
+            pos = np.linalg.inv(camTransform) * pos
+        else:
+            pos = np.linalg.inv(affine*camTransform) * pos
 
         # Project position into 2d coordinates
         posL = camModel.left.project3dToPixel(pos)
@@ -259,9 +262,14 @@ def calculateRegistration(points, pointsCam):
     calculateRMSE(np.mat(pointsCam), np.mat(points), rot, pos)
 
     out = np.hstack((rot,pos))
-    transform = np.matrix(np.vstack((out,[0, 0, 0, 1])))
-
-    return transform
+    transform = np.mat(np.vstack((out,[0, 0, 0, 1])))
+    # newPoints = np.linalg.inv(transform) * np.mat(np.hstack((points, np.ones((len(points),1))))).transpose()
+    # print(newPoints.transpose())
+    # print(newPoints.transpose()[:,0:3])
+    # retval, out2, inliers = cv2.estimateAffine3D(np.mat(pointsCam).transpose(), newPoints[0:3,:])
+    # transform2 = np.mat(np.vstack(out2, [0,0,0,1]))
+    transform2 = np.identity(4)
+    return transform, transform2
 
 def main(psmName):
     rospy.init_node('dvrk_registration', anonymous=True)
@@ -316,11 +324,12 @@ def main(psmName):
     
     # Main registration
     (pointsA, pointsB) = getRegistrationPoints(points, robot, cams, camModel, toolOffset, tfSync)
-    tf = calculateRegistration(pointsA, pointsB)
+    transform, transform2 = calculateRegistration(pointsA, pointsB)
     
 
     # Save all parameters to YAML file
-    data['transform'] = tf.tolist()
+    data['transform'] = transform.tolist()
+    data['affine_transform'] = transform2.tolist()
     data['H'] = cv2.getTrackbarPos('H',_WINDOW_NAME)
     data['minS'] = cv2.getTrackbarPos('min S',_WINDOW_NAME)
     data['minV'] = cv2.getTrackbarPos('min V',_WINDOW_NAME)
@@ -331,12 +340,12 @@ def main(psmName):
 
 
     # Publish transform as message to camera_transform_pub
-    msg = posemath.toMsg(posemath.fromMatrix(tf))
+    msg = posemath.toMsg(posemath.fromMatrix(transform))
     pub = rospy.Publisher('set_camera_transform', Pose, latch=True, queue_size=10)
     pub.publish(msg)
 
     # Show Registration
-    displayRegistration(cams, camModel, toolOffset, tf, tfSync, started=True)
+    displayRegistration(cams, camModel, toolOffset, transform, tfSync, started=True, affine=transform2)
 
     print('Done')
     cv2.destroyAllWindows()
