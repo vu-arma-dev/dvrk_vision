@@ -188,8 +188,7 @@ class UVToWorldConverter(object):
         pcoords = [0.0, 0.0, 0.0]
         tCoords = [0.0, 0.0, 0.0]
         weights = [0.0, 0.0, 0.0]
-
-        points2D = np.empty(points2D.shape)
+        points2D = np.empty(points3D.shape)
 
         for idx, point3D in enumerate(points3D):
             self.pointLocator.FindClosestPoint(point3D, closest, self._cell, cellId, subId, dist)
@@ -202,8 +201,8 @@ class UVToWorldConverter(object):
 
         # If only queried one point, only return one point, no need for 2D array
         if len(points2D) == 1:
-            return points2D[0]
-        return points2D
+            return points2D[0,0:2]
+        return points2D[:,0:2]
 
 if __name__ == '__main__':
     import sys, getopt

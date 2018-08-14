@@ -6,10 +6,9 @@ import rospy
 import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
-from dvrk_vision.manual_registration_gui import ManualRegistrationWidget
-from dvrk_vision.overlay_gui import OverlayWidget
 import dvrk_vision.vtktools as vtktools
 from dvrk_vision.force_overlay import ForceOverlayWidget
+from dvrk_vision.gp_overlay_gui import GpOverlayWidget
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -19,21 +18,11 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         self.tabWidget = QtWidgets.QTabWidget()
         self.setCentralWidget(self.tabWidget)
-        
-        meshPath = rospy.get_param("~mesh_path")
-        try:
-            secondaryMeshPath = rospy.get_param("~secondary_mesh_path")
-        except:
-            rospy.logwarn("No secondary_mesh_path found. Using mesh_path for overlay")
-            secondaryMeshPath = meshPath
-
-        stlScale = rospy.get_param("~mesh_scale")
-        texturePath = rospy.get_param("~texture_path")
 
         # Set up parents
         # regParent = None if masterWidget == None else masterWidget.reg
-        overlayParent = None if masterWidget == None else masterWidget.overlay
-        manualParent = None if masterWidget == None else masterWidget.manual
+        forceParent = None if masterWidget is None else masterWidget.forceOverlay
+        gpParent = None if masterWidget is None else masterWidget.gpWidget
 
         # self.reg = RegistrationWidget(camera,
         #                               meshPath,
@@ -42,28 +31,31 @@ class MainWindow(QtWidgets.QMainWindow):
         #                               parent = self)
         # self.tabWidget.addTab(self.reg, "Organ Registration")
         
-        self.manual = ManualRegistrationWidget(camera,
-                                               texturePath,
-                                               secondaryMeshPath,
-                                               scale=stlScale,
-                                               masterWidget = manualParent,
-                                               parent = self)
-        self.tabWidget.addTab(self.manual, "Manual Registration")
-        
-        self.overlay = OverlayWidget(camera,
-                                     texturePath,
-                                     secondaryMeshPath,
-                                     scale=stlScale,
-                                     masterWidget = overlayParent,
-                                     parent = self)
-        self.tabWidget.addTab(self.overlay, "Stiffness Overlay")
-
+       
         self.forceOverlay = ForceOverlayWidget(camera,
                                                camTransform,
                                                'PSM2',
-                                               '/dvrk/PSM2_FT/raw_wrench')
+                                               '/dvrk/PSM2_FT/raw_wrench',
+                                               masterWidget = forceParent,
+                                               parent = self)
 
         self.tabWidget.addTab(self.forceOverlay, "Force Bar Overlay")
+
+        markerTopic = rospy.get_param('~marker_topic')
+        robotFrame = rospy.get_param('~robot_frame')
+        cameraFrame = rospy.get_param('~camera_frame')
+
+        self.gpWidget = GpOverlayWidget(camera,
+                                        markerTopic,
+                                        robotFrame,
+                                        cameraFrame,
+                                        masterWidget = gpParent,
+                                        parent = self)
+    
+        self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
+
+        self.forceOverlay.Initialize()
+        self.forceOverlay.start()
 
         self.otherWindows = []
         if masterWidget != None:
@@ -71,6 +63,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.otherWindows.append(masterWidget)
 
         self.tabWidget.currentChanged.connect(self.tabChanged)
+
+        self.widgets = {"Force Bar Overlay": self.forceOverlay,
+                        "Stiffness Overlay": self.gpWidget}
+        
 
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
@@ -81,6 +77,16 @@ class MainWindow(QtWidgets.QMainWindow):
         for window in self.otherWindows:
             window.close()
         self.close()
+
+    def hideButtons(self):
+        self.tabWidget.tabBar().hide()
+        self.gpWidget.opacitySlider.hide()
+        self.gpWidget.textureCheckBox.hide()
+
+    def showButtons(self):
+        self.tabWidget.tabBar().show()
+        self.gpWidget.opacitySlider.show()
+        self.gpWidget.textureCheckBox.show()
 
 if __name__ == "__main__":
     from tf import transformations
