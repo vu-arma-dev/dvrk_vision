@@ -13,7 +13,7 @@ from dvrk_vision.vtk_stereo_viewer import StereoCameras
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, camera, camTransform, masterWidget = None):
+    def __init__(self, camera, camTransform, psmName, masterWidget = None):
 
         super(MainWindow, self).__init__()
         self.tabWidget = QtWidgets.QTabWidget()
@@ -34,8 +34,8 @@ class MainWindow(QtWidgets.QMainWindow):
        
         self.forceOverlay = ForceOverlayWidget(camera,
                                                camTransform,
-                                               'PSM2',
-                                               '/dvrk/PSM2_FT/raw_wrench',
+                                               psmName,
+                                               '/dvrk/' + psmName + '_FT/raw_wrench',
                                                masterWidget = forceParent,
                                                parent = self)
 
@@ -102,15 +102,16 @@ if __name__ == "__main__":
                       "right/camera_info",
                       slop = slop)
 
-
+    psmName = rospy.get_param('~psm_name')
     filePath = rospy.get_param('~camera_registration')
+    
     print(filePath)
     with open(filePath, 'r') as f:
         data = yaml.load(f)
     camTransform = data['transform']
 
-    mainWin = MainWindow(cams.camL, camTransform)
-    secondWin = MainWindow(cams.camR, camTransform, masterWidget = mainWin)
+    mainWin = MainWindow(cams.camL, camTransform, psmName)
+    secondWin = MainWindow(cams.camR, camTransform, psmName, masterWidget = mainWin)
     mainWin.show()
     secondWin.show()
     sys.exit(app.exec_())

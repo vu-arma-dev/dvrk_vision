@@ -1,0 +1,15 @@
+<launch>
+<!--
+  <node name="dvrk_jconsole"
+      pkg="dvrk_robot" 
+      type="dvrk_console_json" 
+      args="-j /home/pchalas1/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/jhu-dVRK/console-PSM1.json"
+      output="screen"/>
+-->
+  <include file="$(find dvrk_vision)/launch/dvrk_registration.launch">
+    <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_jhu.yaml" />
+    <arg name="arm" default="PSM1" />
+    <arg name="device_left" default="/dev/video2" />
+  </include>
+
+</launch>

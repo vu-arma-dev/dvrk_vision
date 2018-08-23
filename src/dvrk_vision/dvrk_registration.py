@@ -271,8 +271,9 @@ def calculateRegistration(points, pointsCam):
     transform2 = np.identity(4)
     return transform, transform2
 
-def main(psmName):
+def main():
     rospy.init_node('dvrk_registration', anonymous=True)
+    psmName = rospy.get_param('~arm')
     robot = psm(psmName)
    
     frameRate = 15
@@ -351,4 +352,4 @@ def main(psmName):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main('PSM2')
+    main()

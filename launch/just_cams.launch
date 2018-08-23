@@ -23,7 +23,7 @@
   <!-- arguments for TF publishing -->
   <arg name="frame" default="stereo_camera_frame" />
   <arg name="camera_parent" default="world"/>
-  <arg name="transform_yaml" default="package://dvrk_vision/defaults/registration_params.yaml"/>
+  <arg name="transform_yaml" default="package://dvrk_vision/defaults/registration_params_vu.yaml"/>
 
   <!-- Camera settings are as listed by v4l2-ctl -l -->
   <arg name="exposure" default="150" />
@@ -55,6 +55,7 @@
       <param name="saturation" value="$(arg saturation)"/>
       <param name="brightness" value="$(arg brightness)"/>
       <param name="hue" value="$(arg hue)"/>
+      <param name="device" value="$(arg device_left)"/>
     </node>
 
     <node ns="stereo" pkg="nodelet" type="nodelet" args="standalone dvrk_vision/stereo_camera_info" name="cam_info_node">

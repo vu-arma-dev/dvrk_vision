@@ -1,0 +1,39 @@
+<launch>
+  <arg name="namespace" default="/dvrk/"/>
+  <arg name="master" default="MTMR"/>   
+  <arg name="slave" default="PSM1"/>   
+  <arg name="nri_config" default="$(find dvrk_nri_robot)/config/cmu-dVRK/nri-console-$(arg master)-$(arg slave)-Teleop.json"/>
+  <arg name="scale" default=".95" />
+  <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_jhu.yaml" />
+
+   <include file="$(find dvrk_vision)/launch/just_cams.launch">
+    <arg name="transform_yaml" default="$(arg camera_registration)"/>
+    <arg name="camera_parent" default="$(arg slave)_SIM_psm_base_link"/>
+    <arg name="skip_frames" default="2"/>
+    <arg name="exposure" default="40" />
+    <arg name="white_balance" default="4800" />
+    <arg name="auto_white_balance" default="0" />
+    <arg name="auto_exposure" default="1"/>
+    <arg name="saturation" default="50" />
+    <arg name="brightness" default="0" />
+    <arg name="hue" default="-180" />
+    <arg name="device_left" default="/dev/video2"/>
+  </include>
+  
+  <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+    <param name="camera_registration" value="$(arg camera_registration)" />
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom" />
+    <param name="robot_frame" value="$(arg slave)_SIM_psm_base_link"/>
+    <param name="psm_name" value="$(arg slave)"/>
+    <param name="camera_frame" value="stereo_camera_frame"/>
+  </node>
+
+
+<!--   <node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom"/>
+    <param name="robot_frame" value="/$(arg slave)_SIM_psm_base_link"/>
+    <param name="marker_scale" value="$(arg scale)"/>
+    <param name="camera_registration" value="$(arg camera_registration)" />
+  </node> -->
+
+</launch>
