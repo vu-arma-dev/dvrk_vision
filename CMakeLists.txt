@@ -27,7 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
   camera_info_manager
 )
 
-find_package(OpenCV 2 REQUIRED)
+find_package(OpenCV REQUIRED)
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 # target_link_libraries(my_awesome_library ${OpenCV_LIBRARIES})
