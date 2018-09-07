@@ -10,7 +10,7 @@ if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
 else:
     from PyQt4.QtGui import QWidget, QVBoxLayout, QApplication
     _QT_VERSION = 4
-from geometry_msgs.msg import WrenchStamped
+from geometry_msgs.msg import WrenchStamped, PoseStamped
 from dvrk_vision.vtk_stereo_viewer import StereoCameras, QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
 from dvrk import psm
@@ -19,6 +19,8 @@ from tf_conversions import posemath
 import colorsys
 
 def makeArrowActor(coneRadius = .1, shaftRadius = 0.03, tipLength = 0.35):
+    """ Creates an arrow actor with given properties
+    """
     arrowSource = vtk.vtkArrowSource()
     arrowSource.SetShaftRadius (shaftRadius)
     arrowSource.SetTipRadius (coneRadius)
@@ -33,6 +35,8 @@ def makeArrowActor(coneRadius = .1, shaftRadius = 0.03, tipLength = 0.35):
     return arrowActor
 
 def setActorMatrix(actor, npMatrix):
+    """ Set a VTK actor's transformation based on a 4x4 homogenous transform
+    """
     transform = vtk.vtkTransform()
     transform.Identity()
     transform.SetMatrix(npMatrix.ravel())
@@ -41,16 +45,47 @@ def setActorMatrix(actor, npMatrix):
     actor.SetScale(transform.GetScale())
 
 class ForceOverlayWidget(QVTKStereoViewer):
-    def __init__(self, cam, camTransform, dvrkName, forceTopic, draw="bar", masterWidget=None, parent=None):
+    def __init__(self, cam, camSync, camTransform, dvrkTopic, forceTopic, 
+                 draw="bar", masterWidget=None, parent=None):
+        """ Widget for relaying force information to a user
+    
+        Args:
+            cams (dvrk_vision.vtk_stereo_viewer import StereoCameras): Camera
+                object which contains images for background and utilities for
+                synching transforms.
+
+            camSync (dvrk_vision.tf_sync.CameraSync): Object that allows
+                us to synchronize camera images with robot topics
+
+            camTransform (enumerable[float]): 4x4 homogenous transformation of
+                the camera in the robot's frame
+
+            dvrkTopic (string): ROS topic representing the current position of
+                the robot (geometry_msgs.msg.PoseStamped)
+
+            forceTopic (string): ROS topic representing the current force
+                exerted at the end effector (geometry_msgs.msg.WrenchStamped)
+
+            draw (string): Either "arrow or "bar" depending on how force should
+                be represented on screen
+
+            masterWidget (ForceOverlayWidget): The widget showing the left image
+                that controls both widgets. If None, this IS the control widget
+
+            parent (PyQtX.QWidget): Qt Parent
+        """
+
         super(ForceOverlayWidget, self).__init__(cam, parent=parent)
         self.masterWidget = masterWidget
         self.cameraTransform = arrayToPyKDLFrame(camTransform)
         self.drawType = draw
-        if self.masterWidget is None:
-            self.robot = psm(dvrkName)
-            rospy.Subscriber(forceTopic, WrenchStamped, self.forceCB)
-
-        
+        self.camSync = camSync
+        self.dvrkTopic = dvrkTopic
+        self.forceTopic = forceTopic
+        self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
+        # if self.masterWidget is None:
+        #     self.robot = psm(dvrkName)
+        #     rospy.Subscriber(forceTopic, WrenchStamped, self.forceCB)
 
     def renderSetup(self):
         # Setup interactor
@@ -64,7 +99,6 @@ class ForceOverlayWidget(QVTKStereoViewer):
 
         if self.drawType == "arrow":
             if self.masterWidget is not None:
-                print("HELLO MASTER")
                 self.arrowActor = self.masterWidget.arrowActor
                 self.targetActor = self.masterWidget.targetActor
                 self.ren.AddActor(self.arrowActor)
@@ -123,15 +157,15 @@ class ForceOverlayWidget(QVTKStereoViewer):
             self.greenLine.GetProperty().SetColor(.9,.9,.9)
             self.greenLine.GetProperty().LightingOff()
             self.ren.AddActor(self.greenLine)
-    
-    def forceCB(self, data):
-        self.currentForce = [data.wrench.force.x, data.wrench.force.y, data.wrench.force.z]
 
     def imageProc(self,image):
         if self.masterWidget is not None:
             return image
         # Get current force
-        force = self.currentForce
+        fmsg = self.camSync.getMsg(self.forceTopic)
+        if type(fmsg) is not WrenchStamped:
+            return image
+        force = [fmsg.wrench.force.x, fmsg.wrench.force.y, fmsg.wrench.force.z]
         force = np.linalg.norm(force)
         targetF = 2 # Newtons
         targetR = 2 # Newtons
@@ -141,12 +175,18 @@ class ForceOverlayWidget(QVTKStereoViewer):
         colorPos = np.interp(force, xp, fp)
         color = colorsys.hsv_to_rgb(colorPos**3 / 3, .8,1)
 
+        # Get robot pose
+        posMsg = self.camSync.getMsg(self.dvrkTopic)
+        if type(posMsg) is not PoseStamped:
+            return image
+        pos = posemath.fromMsg(posMsg.pose)
+
         if self.drawType == "arrow":
             self.arrowActor.GetProperty().SetColor(color[0], color[1], color[2])
             # Calculate pose of arrows
             initialRot = PyKDL.Frame(PyKDL.Rotation.RotY(np.pi / 2),
                                      PyKDL.Vector(0, 0, 0))
-            pos = self.robot.get_current_position() * initialRot
+            pos = pos * initialRot
             pos = self.cameraTransform.Inverse() * pos
             posMat = posemath.toMatrix(pos)
             posMatTarget = posMat.copy()
@@ -159,7 +199,6 @@ class ForceOverlayWidget(QVTKStereoViewer):
         elif self.drawType == "bar":
             self.forceBar.GetProperty().SetColor(color[0], color[1], color[2])
             # Move background bar
-            pos = self.robot.get_current_position()
             pos = self.cameraTransform.Inverse() * pos
             pos2 = PyKDL.Frame(PyKDL.Rotation.Identity(), pos.p)
             pos2.M.DoRotZ(np.pi)

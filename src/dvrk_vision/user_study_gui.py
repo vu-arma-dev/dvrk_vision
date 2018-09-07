@@ -7,13 +7,15 @@ import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
 import dvrk_vision.vtktools as vtktools
+from dvrk_vision.tf_sync import CameraSync
 from dvrk_vision.force_overlay import ForceOverlayWidget
-from dvrk_vision.gp_overlay_gui import GpOverlayWidget
+# from dvrk_vision.gp_overlay_gui import GpOverlayWidget
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
+# from dvrk_vision.mark_roi_gui import MarkRoiWidget
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, camera, camTransform, psmName, masterWidget = None):
+    def __init__(self, camera, cameraSync, camTransform, psmName, masterWidget = None):
 
         super(MainWindow, self).__init__()
         self.tabWidget = QtWidgets.QTabWidget()
@@ -22,7 +24,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Set up parents
         # regParent = None if masterWidget == None else masterWidget.reg
         forceParent = None if masterWidget is None else masterWidget.forceOverlay
-        gpParent = None if masterWidget is None else masterWidget.gpWidget
+        # gpParent = None if masterWidget is None else masterWidget.gpWidget
 
         # self.reg = RegistrationWidget(camera,
         #                               meshPath,
@@ -33,8 +35,9 @@ class MainWindow(QtWidgets.QMainWindow):
         
        
         self.forceOverlay = ForceOverlayWidget(camera,
+                                               cameraSync,
                                                camTransform,
-                                               psmName,
+                                               '/dvrk/' + psmName + "/position_cartesian_current",
                                                '/dvrk/' + psmName + '_FT/raw_wrench',
                                                masterWidget = forceParent,
                                                parent = self)
@@ -45,14 +48,23 @@ class MainWindow(QtWidgets.QMainWindow):
         robotFrame = rospy.get_param('~robot_frame')
         cameraFrame = rospy.get_param('~camera_frame')
 
-        self.gpWidget = GpOverlayWidget(camera,
-                                        markerTopic,
-                                        robotFrame,
-                                        cameraFrame,
-                                        masterWidget = gpParent,
-                                        parent = self)
+        # self.gpWidget = GpOverlayWidget(camera,
+        #                                 markerTopic,
+        #                                 robotFrame,
+        #                                 cameraFrame,
+        #                                 masterWidget = gpParent,
+        #                                 parent = self)
     
-        self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
+        # self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
+
+        # self.markerWidget = MarkRoiWidget(camera,
+        #                                   markerTopic,
+        #                                   robotFrame,
+        #                                   cameraFrame,
+        #                                   masterWidget = gpParent,
+        #                                   parent = self)
+    
+        # self.tabWidget.addTab(self.markerWidget, "Stiffness Overlay")
 
         self.forceOverlay.Initialize()
         self.forceOverlay.start()
@@ -64,8 +76,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tabWidget.currentChanged.connect(self.tabChanged)
 
-        self.widgets = {"Force Bar Overlay": self.forceOverlay,
-                        "Stiffness Overlay": self.gpWidget}
+        # self.widgets = {"Force Bar Overlay": self.forceOverlay,
+        #                 "Stiffness Overlay": self.gpWidget}
+
+        self.widgets = {"Force Bar Overlay": self.forceOverlay}
 
 
     def tabChanged(self):
@@ -107,6 +121,8 @@ if __name__ == "__main__":
                       "right/camera_info",
                       slop = slop)
 
+    camSync = CameraSync("left/camera_info")
+
     psmName = rospy.get_param('~psm_name')
     filePath = rospy.get_param('~camera_registration')
     
@@ -115,8 +131,8 @@ if __name__ == "__main__":
         data = yaml.load(f)
     camTransform = data['transform']
 
-    mainWin = MainWindow(cams.camL, camTransform, psmName)
-    secondWin = MainWindow(cams.camR, camTransform, psmName, masterWidget = mainWin)
+    mainWin = MainWindow(cams.camL, camSync, camTransform, psmName)
+    secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin)
     mainWin.show()
     secondWin.show()
     sys.exit(app.exec_())

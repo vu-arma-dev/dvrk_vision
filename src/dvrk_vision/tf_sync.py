@@ -15,21 +15,26 @@ class CameraSync(object):
     _tfBuffer = tf2_ros.Buffer(cache_time=rospy.Duration(1))
     _listener = tf2_ros.TransformListener(_tfBuffer)
 
-    def __init__(self, cameraTopic, topics, frames = None, slop = 1/15.0):
+    def __init__(self, cameraTopic, topics=[], frames = None, slop = 1/15.0):
         self.camTime = None
         self.baseFrame = 'world'
         self._camSub = None
         self.syncher = None
         self.slop = slop
-        self.setCameraTopic(cameraTopic)
+        self.setCameraInfoTopic(cameraTopic)
         self.registerTopics(topics)
         self.frames = frames
 
     def unregister(self):
         if self._camSub is not None:
             self._camSub.unregister()
-        if self._syncher is not None:
-            self.syncher.unregister()
+
+    def addTopics(self, topics):
+        for topic in topics:
+            if topic in self.topics:
+                continue
+            self.topics.append(topic)
+        self.registerTopics(self.topics)
 
     def registerTopics(self, topics):
         self.topics = topics
@@ -42,6 +47,7 @@ class CameraSync(object):
             except ValueError:
                 rospy.logfatal("Could not subscribe to " + topic + ". Make sure topic exists")
                 sys.exit()
+
         self.subs[len(self.topics)] = self._camSub
         self.syncher = message_filters.ApproximateTimeSynchronizer(self.subs,
                                                                    queue_size = 10,
@@ -52,7 +58,15 @@ class CameraSync(object):
         for idx, msg in enumerate(args):
             self.synchedMessages[idx] = msg
 
-    def setCameraTopic(self, topic):
+    def getMsg(self, topic):
+        try:
+            idx = self.topics.index(topic)
+        except ValueError:
+            rospy.loginfo_throttle(60, "Camera Sync: Not subcribed to topic " + topic)
+            return None
+        return self.synchedMessages[idx]
+
+    def setCameraInfoTopic(self, topic):
         self.unregister()
         # Unregister and add 'camera_info' to topic if necessary
         infoTopic = topic
