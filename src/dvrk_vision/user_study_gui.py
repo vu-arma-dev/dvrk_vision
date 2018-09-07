@@ -66,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.widgets = {"Force Bar Overlay": self.forceOverlay,
                         "Stiffness Overlay": self.gpWidget}
-        
+
 
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
@@ -87,6 +87,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabWidget.tabBar().show()
         self.gpWidget.opacitySlider.show()
         self.gpWidget.textureCheckBox.show()
+
+    def changeTab(self, idx):
+        self.tabWidget.setCurrentIndex(idx)
+        for window in self.otherWindows:
+            window.tabWidget.setCurrentIndex(idx)
 
 if __name__ == "__main__":
     from tf import transformations
