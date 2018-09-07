@@ -23,6 +23,7 @@
     <param name="camera_registration" value="$(arg camera_registration)" />
     <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom" />
     <param name="robot_frame" value="$(arg slave)_SIM_psm_base_link"/>
+    <param name="psm_name" value="$(arg slave)"/>
     <param name="camera_frame" value="stereo_camera_frame"/>
   </node>
 
