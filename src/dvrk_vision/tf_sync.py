@@ -6,29 +6,35 @@ from collections import namedtuple, deque
 import rostopic
 import message_filters
 
+
+
 class CameraSync(object):
     # Variables to be shared across all TransformCameraSync objects
+    # This can cause MAJOR problems if you use tf2_ros buffer objects 
+    # elsewhere due to a bug in ROS
     _tfBuffer = tf2_ros.Buffer(cache_time=rospy.Duration(1))
     _listener = tf2_ros.TransformListener(_tfBuffer)
 
-    def __init__(self, cameraTopic, topics, frames, slop = 1/15.0):
+    def __init__(self, cameraTopic, topics, frames = None, slop = 1/15.0):
         self.camTime = None
         self.baseFrame = 'world'
         self._camSub = None
-        self.subs = [None] * (len(topics) + 1) 
-        self.synchedMessages = [None] * (len(topics) + 1)
         self.syncher = None
-        self.setCameraTopic(cameraTopic)
-        self.topics = topics
         self.slop = slop
-        self.registerTopics()
+        self.setCameraTopic(cameraTopic)
+        self.registerTopics(topics)
         self.frames = frames
 
     def unregister(self):
-        if self._camSub != None:
+        if self._camSub is not None:
             self._camSub.unregister()
+        if self._syncher is not None:
+            self.syncher.unregister()
 
-    def registerTopics(self):
+    def registerTopics(self, topics):
+        self.topics = topics
+        self.subs = [None] * (len(topics) + 1) 
+        self.synchedMessages = [None] * (len(topics) + 1)
         for idx, topic in enumerate(self.topics):
             try:
                 msg_class, _, _ = rostopic.get_topic_class(topic)
@@ -60,17 +66,28 @@ class CameraSync(object):
         self.baseFrame = msg.header.frame_id
         self.camTime = msg.header.stamp
 
-    def getTransforms(self):
+    def getTransforms(self, frames=None):
+        """ This function searches for tf_2 frames at the current camera time
+    
+        Args:
+            frames (enumerable[string]): Frames to look up. If none are provided, this function uses
+                the list of frames provided during initialization
+
+        Returns:
+            transforms (list[geometry_msgs/Transform]): The transforms found at the last camera time
+        """
+        if frames == None:
+            frames = self.frames
         # Make local variables so they won't change during _camCB
         camTime = self.camTime
         baseFrame = self.baseFrame
         transforms = []
         if camTime == None:
-            rospy.loginfo("TransformCameraSync: camera_info topic not found. \
-                           Returning [].")
+            rospy.loginfo_throttle(10, "TransformCameraSync: camera_info topic not found. \
+                                        Returning [].")
             return []
 
-        for name in self.frames:
+        for name in frames:
             # Check for transformations between all frames and base
             try:
                 transform = self._tfBuffer.lookup_transform(baseFrame,
