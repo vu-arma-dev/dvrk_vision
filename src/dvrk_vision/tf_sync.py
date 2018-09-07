@@ -80,24 +80,28 @@ class CameraSync(object):
         self.baseFrame = msg.header.frame_id
         self.camTime = msg.header.stamp
 
-    def getTransforms(self, frames=None):
+    def getTransforms(self, frames=None, baseFrame=None):
         """ This function searches for tf_2 frames at the current camera time
     
         Args:
             frames (enumerable[string]): Frames to look up. If none are provided, this function uses
                 the list of frames provided during initialization
 
+            baseFrame (string): Frame to use as base to calculate all transformations
+                if one isn't provided, the camera frame is used as the base frame
+
         Returns:
             transforms (list[geometry_msgs/Transform]): The transforms found at the last camera time
         """
         if frames == None:
             frames = self.frames
+        if baseFrame is None:
+            baseFrame = self.baseFrame
         # Make local variables so they won't change during _camCB
         camTime = self.camTime
-        baseFrame = self.baseFrame
         transforms = []
         if camTime == None:
-            rospy.loginfo_throttle(10, "TransformCameraSync: camera_info topic not found. \
+            rospy.loginfo_throttle(10, "TransformCameraSync: camera_info topic not published. \
                                         Returning [].")
             return []
 
