@@ -23,10 +23,11 @@ import message_filters
 
 class Camera(QObject):
     trigger = pyqtSignal()
-    def __init__(self, parent):
+    def __init__(self, parent, topic):
         super(Camera, self).__init__(parent)
         self.info = None
         self.image = None
+        self.topic = topic
 
 class StereoCameras(QObject):
     bridge = CvBridge()
@@ -34,12 +35,12 @@ class StereoCameras(QObject):
     def __init__(self,imageTopicL, imageTopicR, infoTopicL, infoTopicR, slop=0, parent=None):
         super(StereoCameras, self).__init__(parent)
         # Set up internal variables
-        self.camR = Camera(parent)
-        self.camL = Camera(parent)
+        self.camL = Camera(self, imageTopicL)
+        self.camR = Camera(self, imageTopicR)
 
         # Create subscribers
-        subs = [message_filters.Subscriber(imageTopicL, Image),
-                message_filters.Subscriber(imageTopicR, Image),
+        subs = [message_filters.Subscriber(self.camL.topic, Image),
+                message_filters.Subscriber(self.camR.topic, Image),
                 message_filters.Subscriber(infoTopicL, CameraInfo),
                 message_filters.Subscriber(infoTopicR, CameraInfo)]
         if(slop == 0):
