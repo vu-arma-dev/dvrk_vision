@@ -8,7 +8,7 @@
 
    <include file="$(find dvrk_vision)/launch/just_cams.launch">
     <arg name="transform_yaml" default="$(arg camera_registration)"/>
-    <arg name="camera_parent" default="PSM2_SIM_psm_base_link"/>
+    <arg name="camera_parent" default="PSM2_psm_base_link"/>
     <arg name="skip_frames" default="2"/>
     <arg name="exposure" default="40" />
     <arg name="white_balance" default="4800" />
@@ -21,8 +21,9 @@
   
   <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="camera_registration" value="$(arg camera_registration)" />
-    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom" />
-    <param name="robot_frame" value="$(arg slave)_SIM_psm_base_link"/>
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/slave_phantom" />
+    <param name="robot_frame" value="$(arg slave)_psm_base_link"/>
+    <param name="end_effector_frame" value="$(arg slave)_tool_wrist_sca_shaft_link"/>
     <param name="psm_name" value="$(arg slave)"/>
     <param name="camera_frame" value="stereo_camera_frame"/>
   </node>
@@ -30,7 +31,7 @@
 
 <!--   <node ns="stereo" name="stiffness_to_img" type="stiffnesses_to_image.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom"/>
-    <param name="robot_frame" value="/$(arg slave)_SIM_psm_base_link"/>
+    <param name="robot_frame" value="/$(arg slave)_psm_base_link"/>
     <param name="marker_scale" value="$(arg scale)"/>
     <param name="camera_registration" value="$(arg camera_registration)" />
   </node> -->

@@ -71,7 +71,7 @@ class vtkRosTextureActor(vtk.vtkActor):
 
 class OverlayWidget(QWidget):
     bridge = CvBridge()
-    def __init__(self, camera, texturePath, meshPath, scale=1, masterWidget=None, parent=None):
+    def __init__(self, camera, texturePath=None, meshPath=None, scale=1, masterWidget=None, parent=None):
         super(OverlayWidget, self).__init__()
         uiPath = cleanResourcePath("package://dvrk_vision/src/dvrk_vision/overlay_widget.ui")
         # Get CV image from path
@@ -99,40 +99,51 @@ class OverlayWidget(QWidget):
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
 
-    def renderSetup(self):
-        if type(self.masterWidget) != type(None):
-            self.actor_moving = self.masterWidget.actor_moving
+    def setMeshPath(self, meshPath, scale):
+        self.meshPath = meshPath
+        self.scale = scale
+        # Set up 3D actor for organ
+        meshPath = cleanResourcePath(self.meshPath)
+        extension = os.path.splitext(meshPath)[1]
+        if extension == ".stl" or extension == ".STL":
+            meshReader = vtk.vtkSTLReader()
+        elif extension == ".obj" or extension == ".OBJ":
+            meshReader = vtk.vtkOBJReader()
         else:
-            # Set up 3D actor for organ
-            meshPath = cleanResourcePath(self.meshPath)
-            extension = os.path.splitext(meshPath)[1]
-            if extension == ".stl" or extension == ".STL":
-                meshReader = vtk.vtkSTLReader()
-            elif extension == ".obj" or extension == ".OBJ":
-                meshReader = vtk.vtkOBJReader()
-            else:
-                ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
-            meshReader.SetFileName(meshPath)
-            # Scale STL
-            transform = vtk.vtkTransform()
-            transform.Scale(self.scale,self.scale,self.scale)
-            transformFilter = vtk.vtkTransformFilter()
-            transformFilter.SetTransform(transform)
-            transformFilter.SetInputConnection(meshReader.GetOutputPort())
-            transformFilter.Update()
-            color = (0,0,1)
-            self.actor_moving = vtkRosTextureActor("stiffness_texture", color = color)
-            self.actor_moving.GetProperty().BackfaceCullingOn()
-            self._updateActorPolydata(self.actor_moving,
-                                      polydata=transformFilter.GetOutput(),
-                                      color = color)
+            ROS_FATAL("Mesh file has invalid extension (" + extension + ")")
+        meshReader.SetFileName(meshPath)
+        # Scale STL
+        transform = vtk.vtkTransform()
+        transform.Scale(scale, scale, scale)
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetTransform(transform)
+        transformFilter.SetInputConnection(meshReader.GetOutputPort())
+        transformFilter.Update()
+        color = (0,0,1)
+        self._updateActorPolydata(self.actor_moving,
+                                  polydata=transformFilter.GetOutput(),
+                                  color = color)
+        if image is not None:
             # Set texture to default
             image = cv2.imread(cleanResourcePath(self.texturePath))
             self.actor_moving.setTexture(image)
             self.actor_moving.textureOnOff(True)
 
-        # Hide actor
-        self.actor_moving.VisibilityOff()
+
+
+    def renderSetup(self):
+        if type(self.masterWidget) != type(None):
+            self.actor_moving = self.masterWidget.actor_moving
+
+        else:
+            color = (0,0,1)
+            self.actor_moving = vtkRosTextureActor("stiffness_texture", color = color)
+            self.actor_moving.GetProperty().BackfaceCullingOn()
+            if self.meshPath is not None:
+                self.setMeshPath(self.meshPath, self.scale)
+            # Hide actor
+            self.actor_moving.VisibilityOff()
+
         # Add actor
         self.vtkWidget.ren.AddActor(self.actor_moving)
         # Setup interactor

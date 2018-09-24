@@ -2,11 +2,11 @@
 import vtk
 # Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
 if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
-    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication
+    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication, QCheckBox, QPushButton
     from PyQt5 import uic
     _QT_VERSION = 5
 else:
-    from PyQt4.QtGui import QWidget, QVBoxLayout, QApplication
+    from PyQt4.QtGui import QWidget, QVBoxLayout, QApplication, QCheckBox, QPushButton
     from PyQt4 import uic
     _QT_VERSION = 4
 # General imports
@@ -78,7 +78,7 @@ def matrixListToMultiarray(matrix):
     return msg
 
 def loadMesh(path, scale):
-     # Read in STL
+    # Read in STL
     meshPath = cleanResourcePath(path)
     extension = os.path.splitext(path)[1]
     if extension == ".stl" or extension == ".STL":
@@ -111,14 +111,34 @@ def generateGrid(xmin, xmax, ymin, ymax, res):
 
     return grid
 
+def makeSphere(radius):
+    # create source
+    source = vtk.vtkSphereSource()
+    source.SetCenter(0,0,0)
+    source.SetRadius(radius)
+     
+    # mapper
+    mapper = vtk.vtkPolyDataMapper()
+    if vtk.VTK_MAJOR_VERSION <= 5:
+        mapper.SetInput(source.GetOutput())
+    else:
+        mapper.SetInputConnection(source.GetOutputPort())
+     
+    # actor
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+
+    return actor
+
+
 class GpOverlayWidget(QWidget):
     bridge = CvBridge()
-    tfBuffer = tf2_ros.Buffer()
-    listener = tf2_ros.TransformListener(tfBuffer)
-    def __init__(self, camera, markerTopic, robotFrame, cameraFrame, masterWidget=None, parent=None):
+    def __init__(self, camera, tfBuffer, markerTopic, robotFrame, tipFrame, cameraFrame, masterWidget=None, parent=None):
         super(GpOverlayWidget, self).__init__(parent=parent)
         # Load in variables
+        self.tfBuffer = tfBuffer
         self.robotFrame = robotFrame
+        self.tipFrame = tipFrame
         self.markerTopic = markerTopic
         self.cameraFrame = cameraFrame
         self.masterWidget = masterWidget
@@ -145,8 +165,19 @@ class GpOverlayWidget(QWidget):
 
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
+        self.iren.AddObserver("MiddleButtonPressEvent", self.addPOI)
+        self.organFrame = None
 
         self.textureCheckBox.setText("Show GP mesh")
+
+        self.POICheckBox = QCheckBox("Show markers", self)
+        self.POICheckBox.setChecked(True)
+        self.POICheckBox.stateChanged.connect(self.checkBoxChanged)
+        self.horizontalLayout.addWidget(self.POICheckBox)
+        
+        self.clearButton = QPushButton("Clear markers", self)
+        self.clearButton.pressed.connect(self.checkBoxChanged)
+        self.horizontalLayout.addWidget(self.clearButton)
 
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
@@ -163,18 +194,41 @@ class GpOverlayWidget(QWidget):
             self.gpActor.VisibilityOn()
         else:
             self.gpActor.VisibilityOff()
-        # self.actorOrgan.textureOnOff(self.textureCheckBox.isChecked())
-        # self.actorOrgan.GetProperty().LightingOn()
         for window in self.otherWindows:
             window.textureCheckBox.setChecked(self.textureCheckBox.isChecked())
 
+    def clearPOI(self):
+        for actor in self.POI:
+            self.actorGroup.RemovePart(actor)
+            del actor
+        self.POI = []
+
+    def checkBoxPOIChanged(self):
+        if(self.POICheckBox.isChecked()):
+            for actor in self.POI:
+                actor.VisibilityOn()
+        else:
+            for actor in self.POI:
+                actor.VisibilityOff()
+        # self.actorOrgan.textureOnOff(self.textureCheckBox.isChecked())
+        # self.actorOrgan.GetProperty().LightingOn()
+        for window in self.otherWindows:
+            window.POICheckBox.setChecked(self.POICheckBox.isChecked())
+
     def renderSetup(self):
         if self.masterWidget is not None:
-            self.actorOrgan = self.masterWidget.actorOrgan
+            self.actorGroup = self.masterWidget.actorGroup
+            self.sphere = self.masterWidget.sphere
+            self.POI = self.masterWidget.POI
             self.gpActor = self.masterWidget.gpActor
-            self.vtkWidget.ren.AddActor(self.actorOrgan)
-            self.vtkWidget.ren.AddActor(self.gpActor)
+            self.actorOrgan = self.masterWidget.actorOrgan
+            self.vtkWidget.ren.AddActor(self.actorGroup)
             return
+
+        self.actorGroup = vtk.vtkAssembly()
+
+        self.sphere = makeSphere(.003)
+        self.POI = []
 
         # Empty variables for organ data
         color = (0,0,1)
@@ -206,6 +260,7 @@ class GpOverlayWidget(QWidget):
 
         # Set up subscriber for marker
         self.meshPath = ""
+        self.organFrame = None
         markerSub = message_filters.Subscriber(self.markerTopic, Marker)
         markerSub.registerCallback(self.markerCB)
 
@@ -227,8 +282,9 @@ class GpOverlayWidget(QWidget):
         self.actorOrgan.GetProperty().LightingOn()
 
         # Add actors
-        self.vtkWidget.ren.AddActor(self.actorOrgan)
-        self.vtkWidget.ren.AddActor(self.gpActor)
+        self.actorGroup.AddPart(self.actorOrgan)
+        self.actorGroup.AddPart(self.gpActor)
+        self.vtkWidget.ren.AddActor(self.actorGroup)
 
         # Set up timer callback
         cb = vtkTimerCallback(self.vtkWidget._RenderWindow)
@@ -254,15 +310,30 @@ class GpOverlayWidget(QWidget):
             actor.GetProperty().SetColor(1, 0, 0)
         self.sliderChanged()
 
+    def addPOI(self, obj, event):
+        if self.organFrame is None:
+            return
+        poseRobot = self.tfBuffer.lookup_transform(self.cameraFrame, self.tipFrame, rospy.Time())
+        posRobot = poseRobot.transform.translation
+        rotRobot = poseRobot.transform.rotation
+        matRobot = transformations.quaternion_matrix([rotRobot.x, rotRobot.y, rotRobot.z, rotRobot.w])
+
+        actor = vtk.vtkActor()
+        actor.ShallowCopy(self.sphere)
+        posTip = np.array([posRobot.x, posRobot.y, posRobot.z])# + np.array(matRobot[3,0:3].tolist())
+        actor.SetPosition(posTip[0], posTip[1], posTip[2])
+        self.POI.append(actor)
+        self.actorGroup.AddPart(actor);
+
     def markerCB(self, data):
         meshPath = cleanResourcePath(data.mesh_resource)
         if meshPath != self.meshPath:
             self.meshPath = meshPath
             try:
-                organFrame = data.header.frame_id
-                if organFrame[0] == "/":
-                    organFrame = organFrame[1:]
-                poseCamera = self.tfBuffer.lookup_transform(self.cameraFrame, organFrame, rospy.Time())
+                self.organFrame = data.header.frame_id
+                if self.organFrame[0] == "/":
+                    self.organFrame = self.organFrame[1:]
+                poseCamera = self.tfBuffer.lookup_transform(self.cameraFrame, self.organFrame, rospy.Time())
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                 rospy.logwarn(e)
                 return
@@ -307,8 +378,6 @@ class GpOverlayWidget(QWidget):
     def update(self):
         if not self.isVisible():
             return
-        self.gpActor.SetPosition(self.actorOrgan.GetPosition())
-        self.gpActor.SetOrientation(self.actorOrgan.GetOrientation())
         if len(self.points) == 0:
             return
         if len(self.points) != len(self.stiffness) or self.meshPath == "":
@@ -400,7 +469,8 @@ if __name__ == '__main__':
     # markerTopic = rospy.get_param("~marker_topic")
     # robotFrame = rospy.get_param("~robot_frame")
     # cameraFrame = rospy.get_param("~robot_frame")
-    markerTopic = "/dvrk/MTMR_PSM2/proxy_slave_phantom"
+    # markerTopic = "/dvrk/MTMR_PSM2/proxy_slave_phantom"
+    markerTopic = "/stereo/registration_marker"
     robotFrame = "PSM2_SIM_psm_base_link"
     cameraFrame = "stereo_camera_frame"
     frameRate = 15

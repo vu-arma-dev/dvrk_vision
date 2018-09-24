@@ -1,11 +1,4 @@
 import vtk
-# Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
-if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
-    from PyQt5.QtWidgets import QApplication
-    _QT_VERSION = 5
-else:
-    from PyQt4.QtGui import QApplication
-    _QT_VERSION = 4
 from dvrk_vision.overlay_gui import OverlayWidget
 import dvrk_vision.vtktools as vtktools
 from visualization_msgs.msg import Marker
@@ -33,16 +26,18 @@ def makeMarker(path, scale):
     return markerMsg
 
 class ManualRegistrationWidget(OverlayWidget):
-    def __init__(self, camera, texturePath, meshPath, scale=1, masterWidget=None, parent=None):
+    def __init__(self, camera, texturePath, meshPath=None, scale=1, markerTopic="/stereo/registration_marker",masterWidget=None, parent=None):
         super(ManualRegistrationWidget, self).__init__(camera, texturePath, meshPath, scale, masterWidget, parent)
         self.interacting = False
         self.dolly = False
         # Set up subscriber for registered organ position
-        poseSubTopic = "/stereo/registration_marker"
-        self.poseSub = rospy.Subscriber(poseSubTopic, Marker, self.poseCallback)
+        self.poseSub = rospy.Subscriber(markerTopic, Marker, self.poseCallback)
 
         self.posePub = rospy.Publisher("/stereo/registration_marker", Marker, queue_size=10)
-        self.marker = makeMarker(meshPath, scale)
+        if meshPath is not None:
+            self.marker = makeMarker(meshPath, scale)
+        else:
+            self.marker = None
 
 
     def renderSetup(self):
@@ -63,6 +58,8 @@ class ManualRegistrationWidget(OverlayWidget):
         # self.iren.Disable()
 
     def publishPose(self):
+        if self.meshPath is None:
+            return
         pos = self.actor_moving.GetPosition()
         rot = self.actor_moving.GetOrientationWXYZ()
         w = (rot[0] / 180) * np.pi
@@ -111,10 +108,23 @@ class ManualRegistrationWidget(OverlayWidget):
         if self.isVisible():
             self.vtkWidget.ren.ResetCameraClippingRange()
 
+    def setMeshPath(self, meshPath, scale):
+        super(ManualRegistrationWidget, self).setMeshPath(meshPath, scale)
+        self.marker = None
+
+
 if __name__ == "__main__":
     # App specific imports
     import sys
     from dvrk_vision.vtk_stereo_viewer import StereoCameras
+
+    # Which PyQt we use depends on our vtk version. QT4 causes segfaults with vtk > 6
+    if(int(vtk.vtkVersion.GetVTKVersion()[0]) >= 6):
+        from PyQt5.QtWidgets import QApplication
+        _QT_VERSION = 5
+    else:
+        from PyQt4.QtGui import QApplication
+        _QT_VERSION = 4
 
     app = QApplication(sys.argv)
     rosThread = vtktools.QRosThread()

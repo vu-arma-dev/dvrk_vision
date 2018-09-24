@@ -9,9 +9,9 @@ from dvrk_vision.registration_gui import RegistrationWidget
 import dvrk_vision.vtktools as vtktools
 from dvrk_vision.tf_sync import CameraSync
 from dvrk_vision.force_overlay import ForceOverlayWidget
-# from dvrk_vision.gp_overlay_gui import GpOverlayWidget
+from dvrk_vision.gp_overlay_gui import GpOverlayWidget
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
-# from dvrk_vision.mark_roi_gui import MarkRoiWidget
+from dvrk_vision.mark_roi_gui import MarkRoiWidget
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -24,7 +24,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Set up parents
         # regParent = None if masterWidget == None else masterWidget.reg
         forceParent = None if masterWidget is None else masterWidget.forceOverlay
-        # gpParent = None if masterWidget is None else masterWidget.gpWidget
+        gpParent = None if masterWidget is None else masterWidget.gpWidget
+        # markerParent = None if masterWidget is None else masterWidget.markerWidget
 
         # self.reg = RegistrationWidget(camera,
         #                               meshPath,
@@ -46,24 +47,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
         markerTopic = rospy.get_param('~marker_topic')
         robotFrame = rospy.get_param('~robot_frame')
+        tipFrame = rospy.get_param('~end_effector_frame')
         cameraFrame = rospy.get_param('~camera_frame')
 
         # self.gpWidget = GpOverlayWidget(camera,
-        #                                 markerTopic,
         #                                 robotFrame,
         #                                 cameraFrame,
+        #                                 markerTopic,
         #                                 masterWidget = gpParent,
         #                                 parent = self)
     
         # self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
 
         # self.markerWidget = MarkRoiWidget(camera,
+        #                                   cameraSync._tfBuffer,
         #                                   markerTopic,
         #                                   robotFrame,
         #                                   cameraFrame,
-        #                                   masterWidget = gpParent,
+        #                                   masterWidget = markerParent,
         #                                   parent = self)
-    
+
+        self.gpWidget = GpOverlayWidget(camera,
+                                        cameraSync._tfBuffer,
+                                        markerTopic,
+                                        robotFrame,
+                                        tipFrame,
+                                        cameraFrame,
+                                        masterWidget = gpParent,
+                                        parent = self)
+
+        self.tabWidget.addTab(self.gpWidget, "Stiffness Overlay")
+
         # self.tabWidget.addTab(self.markerWidget, "Stiffness Overlay")
 
         self.forceOverlay.Initialize()
@@ -76,10 +90,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tabWidget.currentChanged.connect(self.tabChanged)
 
-        # self.widgets = {"Force Bar Overlay": self.forceOverlay,
-        #                 "Stiffness Overlay": self.gpWidget}
+        self.widgets = {"Force Bar Overlay": self.forceOverlay,
+                        "Stiffness Overlay": self.gpWidget}
 
-        self.widgets = {"Force Bar Overlay": self.forceOverlay}
+        # self.widgets = {"Force Bar Overlay": self.forceOverlay}
 
 
     def tabChanged(self):
