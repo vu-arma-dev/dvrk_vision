@@ -1,4 +1,5 @@
 <launch>
+
   <arg name="namespace" default="/dvrk/"/>
   <arg name="master" default="MTMR"/>   
   <arg name="slave" default="PSM2"/>   
@@ -6,7 +7,17 @@
   <arg name="scale" default=".95" />
   <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
+  <arg name="width" value="640" />
+  <arg name="height" value="480" />
+
    <include file="$(find dvrk_vision)/launch/just_cams.launch">
+
+    <arg name="width" value="$(arg width)" />
+    <arg name="height" value="$(arg height)" />
+    <arg name="single_image_from_camera" value="false" />
+    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/misumi0_calibration_$(arg width)x$(arg height).yaml" />
+    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/misumi1_calibration_$(arg width)x$(arg height).yaml"/>
+    
     <arg name="transform_yaml" default="$(arg camera_registration)"/>
     <arg name="camera_parent" default="PSM2_psm_base_link"/>
     <arg name="skip_frames" default="2"/>

@@ -1,17 +1,34 @@
 <launch>
   <arg name="arm"/>
   <arg name="yaml"/>
+  <arg name="width"/>
+  <arg name="height"/>
+
+  <arg name="camera_info_url_left" default="file://$(find dvrk_vision)/defaults/stereo_cam0_calibration_$(arg width)x$(arg height).yaml" />
+  <arg name="camera_info_url_right" default="file://$(find dvrk_vision)/defaults/stereo_cam1_calibration_$(arg width)x$(arg height).yaml" />
+
+
   <arg name="device_left" default="/dev/video0"/>
+  <arg name="device_right" default="/dev/video1"/>
+
   <include file="$(find dvrk_vision)/launch/just_cams.launch">
-	<arg name="device_left" default="$(arg device_left)"/>
-  	<arg name="camera_parent" default="$(arg arm)_psm_base_link"/>
+
+    <arg name="width" value="$(arg width)" />
+    <arg name="height" value="$(arg height)" />
+    <arg name="single_image_from_camera" value="false" />
+
+    <arg name="camera_info_url_left" value="$(arg camera_info_url_left)" />
+    <arg name="camera_info_url_right" value="(arg camera_info_url_right)"/>
+
+    <arg name="device_left" default="$(arg device_left)"/>
+    <arg name="device_right" default="$(arg device_right)"/>
+    <arg name="camera_parent" default="$(arg arm)_psm_base_link"/>
   </include>
 
   <node ns="stereo" pkg="dvrk_vision" type="dvrk_registration.py"
-  		  name="registration" output="screen" required="true">
+        name="registration" output="screen" required="true">
     <param name="registration_yaml" value="$(arg yaml)" />
     <param name="arm" value="$(arg arm)"/>
   </node>
-  		
 
 </launch>

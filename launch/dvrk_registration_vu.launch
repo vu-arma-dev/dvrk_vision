@@ -3,12 +3,16 @@
   <node name="dvrk_jconsole"
       pkg="dvrk_robot" 
       type="dvrk_console_json" 
-      args="-j /home/arma/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/vu-dVRK/console-PSM2.json"
+      args="-j /home/arma/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/vu-dVRK/console-PSM2_VU.json"
       output="screen"/>
 
   <include file="$(find dvrk_vision)/launch/dvrk_registration.launch">
-    <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
+    <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />    
+    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/misumi0_calibration_$(arg width)x$(arg height).yaml" />
+    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/misumi1_calibration_$(arg width)x$(arg height).yaml"/>
     <arg name="arm" default="PSM2" />
+    <arg name="width" value="640" />
+    <arg name="height" value="480" />
   </include>
 
 </launch>
