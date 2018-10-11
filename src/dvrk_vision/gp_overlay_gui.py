@@ -54,7 +54,12 @@ def multiArrayToMatrixList(ma_msg):
         print "Error: dim[1] should be the columns"
     columns = ma_msg.layout.dim[1].size
 
-    return np.array(ma_msg.data, dtype=np.float64).reshape((rows, columns))
+    data = np.array(ma_msg.data, dtype=np.float64)
+    if(len(data) != rows*columns):
+        rospy.logwarn_throttle(5, "Data in Float64MultiArray message does not match stated size")
+        return np.empty([])
+
+    return data.reshape((rows, columns))
 
 def matrixListToMultiarray(matrix):
     rows, columns = matrix.shape
@@ -165,7 +170,7 @@ class GpOverlayWidget(QWidget):
 
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
-        self.iren.AddObserver("MiddleButtonPressEvent", self.addPOI)
+
         self.organFrame = None
 
         self.textureCheckBox.setText("Show GP mesh")
@@ -176,7 +181,7 @@ class GpOverlayWidget(QWidget):
         self.horizontalLayout.addWidget(self.POICheckBox)
         
         self.clearButton = QPushButton("Clear markers", self)
-        self.clearButton.pressed.connect(self.checkBoxChanged)
+        self.clearButton.pressed.connect(self.clearPOI)
         self.horizontalLayout.addWidget(self.clearButton)
 
         self.vtkWidget.Initialize()
@@ -310,7 +315,7 @@ class GpOverlayWidget(QWidget):
             actor.GetProperty().SetColor(1, 0, 0)
         self.sliderChanged()
 
-    def addPOI(self, obj, event):
+    def addPOI(self):
         if self.organFrame is None:
             return
         poseRobot = self.tfBuffer.lookup_transform(self.cameraFrame, self.tipFrame, rospy.Time())
@@ -321,6 +326,7 @@ class GpOverlayWidget(QWidget):
         actor = vtk.vtkActor()
         actor.ShallowCopy(self.sphere)
         posTip = np.array([posRobot.x, posRobot.y, posRobot.z])# + np.array(matRobot[3,0:3].tolist())
+        print(posTip)
         actor.SetPosition(posTip[0], posTip[1], posTip[2])
         self.POI.append(actor)
         self.actorGroup.AddPart(actor);

@@ -167,10 +167,10 @@ class ForceOverlayWidget(QVTKStereoViewer):
             return image
         force = [fmsg.wrench.force.x, fmsg.wrench.force.y, fmsg.wrench.force.z]
         force = np.linalg.norm(force)
-        targetF = 2 # Newtons
-        targetR = 2 # Newtons
+        targetF = 3 # Newtons
+        targetMax = 6 # Newtons
         # Calculate color
-        xp = [targetF-targetR, targetF, targetF+targetR]
+        xp = [0, targetF, targetMax]
         fp = [0, 1, 0]
         colorPos = np.interp(force, xp, fp)
         color = colorsys.hsv_to_rgb(colorPos**3 / 3, .8,1)
@@ -202,7 +202,7 @@ class ForceOverlayWidget(QVTKStereoViewer):
             pos = self.cameraTransform.Inverse() * pos
             pos2 = PyKDL.Frame(PyKDL.Rotation.Identity(), pos.p)
             pos2.M.DoRotZ(np.pi)
-            pos2.p = pos2.p + pos2.M.UnitX() * -.015
+            pos2.p = pos2.p + pos2.M.UnitX() * -.015# + pos2.M.UnitZ() * 0.01
             posMat = posemath.toMatrix(pos2)
             setActorMatrix(self.bar, posMat)
             setActorMatrix(self.greenLine, posMat)
@@ -213,6 +213,11 @@ class ForceOverlayWidget(QVTKStereoViewer):
             setActorMatrix(self.forceBar, posMat)
 
         return image
+
+    def setBarVisibility(self,b_input=True):
+        self.bar.SetVisibility(b_input)
+        self.forceBar.SetVisibility(b_input)
+        self.greenLine.SetVisibility(b_input)
 
 def arrayToPyKDLRotation(array):
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])

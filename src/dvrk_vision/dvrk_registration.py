@@ -71,7 +71,7 @@ def mask(img):
     vMin = cv2.getTrackbarPos('min V',_WINDOW_NAME)
     vMax = cv2.getTrackbarPos('max V',_WINDOW_NAME)
     colorLower = (np.max((h-15,0)), sMin, vMin)
-    colorUpper = (np.min((h+15,180)), 255, vMax)
+    colorUpper = (np.min((h+15,255)), 255, vMax)
     blurred = cv2.GaussianBlur(img, (5, 5), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, colorLower, colorUpper )
@@ -212,7 +212,7 @@ def getRegistrationPoints(points, robot, cams, camModel, toolOffset, tfSync):
     print points
     pointsCam = np.empty(points.shape)
     for i, point in enumerate(points):
-        b_stopMotion = False
+        b_stopMotion = True
         if rospy.is_shutdown():
             quit()
         if not robot.move(PyKDL.Vector(point[0], point[1], point[2])):
@@ -309,7 +309,7 @@ def main():
         quit()
 
     cv2.namedWindow(_WINDOW_NAME)
-    cv2.createTrackbar('H', _WINDOW_NAME, data['H'], 180, nothingCB)
+    cv2.createTrackbar('H', _WINDOW_NAME, data['H'], 240, nothingCB)
     cv2.createTrackbar('min S', _WINDOW_NAME, data['minS'], 255, nothingCB)
     cv2.createTrackbar('min V', _WINDOW_NAME, data['minV'], 255, nothingCB)
     cv2.createTrackbar('max V', _WINDOW_NAME, data['maxV'], 255, nothingCB)

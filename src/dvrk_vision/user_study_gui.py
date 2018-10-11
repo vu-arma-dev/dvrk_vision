@@ -3,6 +3,9 @@ import sys
 import os
 import numpy as np
 import rospy
+from std_msgs.msg import Int32
+from std_msgs.msg import Bool
+from std_msgs.msg import Empty
 import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
@@ -11,7 +14,6 @@ from dvrk_vision.tf_sync import CameraSync
 from dvrk_vision.force_overlay import ForceOverlayWidget
 from dvrk_vision.gp_overlay_gui import GpOverlayWidget
 from dvrk_vision.vtk_stereo_viewer import StereoCameras
-from dvrk_vision.mark_roi_gui import MarkRoiWidget
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -33,8 +35,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #                               masterWidget = regParent,
         #                               parent = self)
         # self.tabWidget.addTab(self.reg, "Organ Registration")
-        
-       
+
         self.forceOverlay = ForceOverlayWidget(camera,
                                                cameraSync,
                                                camTransform,
@@ -94,7 +95,19 @@ class MainWindow(QtWidgets.QMainWindow):
                         "Stiffness Overlay": self.gpWidget}
 
         # self.widgets = {"Force Bar Overlay": self.forceOverlay}
+        self.selectSub = rospy.Subscriber(name='/control/windowSelect', 
+                                        data_class=Int32,
+                                        callback=self.windowSelectCB,
+                                        queue_size=1)
 
+        self.forceSub = rospy.Subscriber(name='/control/forceDisplay', 
+                                        data_class=Bool,
+                                        callback=self.forceBarCB,
+                                        queue_size=1)
+        self.pinchSub = rospy.Subscriber(name='/dvrk/MTMR/gripper_pinch_event', 
+                                        data_class=Empty,
+                                        callback=self.pinchCB,
+                                        queue_size=1)
 
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
@@ -116,10 +129,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.gpWidget.opacitySlider.show()
         self.gpWidget.textureCheckBox.show()
 
-    def changeTab(self, idx):
-        self.tabWidget.setCurrentIndex(idx)
+    def changeTab(self, idxmsg):
+        self.tabWidget.setCurrentIndex(idxmsg.data)
         for window in self.otherWindows:
-            window.tabWidget.setCurrentIndex(idx)
+            window.tabWidget.setCurrentIndex(idxmsg.data)
+
+    def windowSelectCB(self,windowNum):
+        print('SELECTING WINDOW')
+        self.changeTab(windowNum)
+
+    def forceBarCB(self,b_input):
+        print('FORCE VISIBILITY')
+        self.forceOverlay.setBarVisibility(b_input=b_input.data)
+
+    def pinchCB(self,emptyInput):
+        self.gpWidget.addPOI()
 
 if __name__ == "__main__":
     from tf import transformations
@@ -149,4 +173,5 @@ if __name__ == "__main__":
     secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin)
     mainWin.show()
     secondWin.show()
+
     sys.exit(app.exec_())
