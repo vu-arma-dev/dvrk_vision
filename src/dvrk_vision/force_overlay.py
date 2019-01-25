@@ -34,6 +34,36 @@ def makeArrowActor(coneRadius = .1, shaftRadius = 0.03, tipLength = 0.35):
     arrowActor.SetMapper(mapper)
     return arrowActor
 
+# Make a 2D text actor that you can place as a particular 2D location (not as useful)
+def makeTextActor(text="Move around and do some stuff"):
+    textActor = vtk.vtkTextActor()
+    textActor.SetInput(text)
+    txtprop=textActor.GetTextProperty()
+    txtprop.SetFontFamilyToArial()
+    txtprop.SetFontSize(25)
+    txtprop.SetColor(1,0,0)
+    txtprop.SetBackgroundColor(1,1,1)
+    txtprop.SetBackgroundOpacity(1.0)
+    txtprop.SetJustificationToCentered()
+    textActor.SetDisplayPosition(300,50)
+
+    return textActor
+
+# Make a 3D text actor
+def makeTextActor3D(text="Palpate Left to Right"):
+    vecText = vtk.vtkVectorText()
+    vecText.SetText(text)
+    textMapper = vtk.vtkPolyDataMapper()
+    textMapper.SetInputConnection(vecText.GetOutputPort())
+    textActor = vtk.vtkFollower()
+    textActor.SetMapper(textMapper)
+    textActor.SetScale(0.01,0.01, 0.01)
+    textActor.SetOrientation(0,0,-180)
+    txtProp = textActor.GetProperty()
+    txtProp.SetColor(1,0,0)
+
+    return textActor,vecText
+
 def setActorMatrix(actor, npMatrix):
     """ Set a VTK actor's transformation based on a 4x4 homogenous transform
     """
@@ -96,6 +126,23 @@ class ForceOverlayWidget(QVTKStereoViewer):
         self.iren.RemoveObservers('MiddleButtonPressEvent')
         self.iren.RemoveObservers('MiddleButtonPressEvent')
         self.currentForce = [0,0,0]
+
+
+        # Change camera location/orientation to get text facing upright
+        # This completely breaks the tracking of the force bar with the robot, but does get the text looking ok (as long as you switch the left and right...)
+        cam = vtk.vtkCamera()
+        cam.SetFocalPoint(0,0,-1)
+        cam.SetViewUp(0,1,0)
+        self.ren.SetActiveCamera(cam)
+
+        if self.masterWidget is not None:
+            self.textActor = self.masterWidget.textActor
+        else:
+            [self.textActor,self.vecText] = makeTextActor3D()
+            self.textActor.SetPosition(-0.04,0.04,0.75)
+            self.textActor.SetOrientation(0,0,0)
+            self.vecText.SetText("TEST")
+        self.ren.AddActor(self.textActor)
 
         if self.drawType == "arrow":
             if self.masterWidget is not None:
@@ -206,6 +253,7 @@ class ForceOverlayWidget(QVTKStereoViewer):
             posMat = posemath.toMatrix(pos2)
             setActorMatrix(self.bar, posMat)
             setActorMatrix(self.greenLine, posMat)
+
             # Scale color bar
             fp2 = [0, .5, 1]
             scalePos = np.interp(force, xp, fp2)
@@ -218,6 +266,9 @@ class ForceOverlayWidget(QVTKStereoViewer):
         self.bar.SetVisibility(b_input)
         self.forceBar.SetVisibility(b_input)
         self.greenLine.SetVisibility(b_input)
+
+    def setText(self,textInput):
+        self.vecText.SetText(textInput)
 
 def arrayToPyKDLRotation(array):
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])

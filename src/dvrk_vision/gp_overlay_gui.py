@@ -27,6 +27,7 @@ from dvrk_vision.overlay_gui import vtkRosTextureActor
 from dvrk_vision.vtk_stereo_viewer import QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
 from dvrk_vision import uvtoworld
+from force_overlay import makeTextActor
 
 class vtkTimerCallback(object):
     def __init__(self, renWin):
@@ -191,6 +192,7 @@ class GpOverlayWidget(QWidget):
 
     def sliderChanged(self):
         self.actorOrgan.GetProperty().SetOpacity(self.opacitySlider.value() / 255.0)
+        self.gpActor.GetProperty().SetOpacity(self.opacitySlider.value() / 255.0)
         for window in self.otherWindows:
             window.opacitySlider.setValue(self.opacitySlider.value())
 
@@ -228,9 +230,11 @@ class GpOverlayWidget(QWidget):
             self.gpActor = self.masterWidget.gpActor
             self.actorOrgan = self.masterWidget.actorOrgan
             self.vtkWidget.ren.AddActor(self.actorGroup)
+            self.textActor = self.masterWidget.textActor
             return
 
         self.actorGroup = vtk.vtkAssembly()
+        [self.textActor,self.vecText] = makeTextActor3D()
 
         self.sphere = makeSphere(.003)
         self.POI = []
@@ -290,12 +294,16 @@ class GpOverlayWidget(QWidget):
         self.actorGroup.AddPart(self.actorOrgan)
         self.actorGroup.AddPart(self.gpActor)
         self.vtkWidget.ren.AddActor(self.actorGroup)
+        self.vtkWidget.ren.AddActor(self.textActor)
 
         # Set up timer callback
         cb = vtkTimerCallback(self.vtkWidget._RenderWindow)
         cb.update = self.update
         self.iren.AddObserver('TimerEvent', cb.execute)
         self.iren.CreateRepeatingTimer(15)
+
+    def setText(self,textInput):
+        self.vecText.SetText(textInput)
 
     def _updateActorPolydata(self,actor,polydata,color=None):
         # Modifies an actor with new polydata

@@ -5,6 +5,7 @@ import numpy as np
 import rospy
 from std_msgs.msg import Int32
 from std_msgs.msg import Bool
+from std_msgs.msg import String
 from std_msgs.msg import Empty
 import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -104,10 +105,15 @@ class MainWindow(QtWidgets.QMainWindow):
                                         data_class=Bool,
                                         callback=self.forceBarCB,
                                         queue_size=1)
-        self.pinchSub = rospy.Subscriber(name='/dvrk/MTMR/gripper_pinch_event', 
-                                        data_class=Empty,
-                                        callback=self.pinchCB,
+
+        self.textSub = rospy.Subscriber(name='/control/textDisplay', 
+                                        data_class=String,
+                                        callback=self.textCB,
                                         queue_size=1)
+        # self.pinchSub = rospy.Subscriber(name='/dvrk/MTMR/gripper_pinch_event', 
+        #                                 data_class=Empty,
+        #                                 callback=self.pinchCB,
+        #                                 queue_size=1)
 
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
@@ -141,6 +147,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def forceBarCB(self,b_input):
         print('FORCE VISIBILITY')
         self.forceOverlay.setBarVisibility(b_input=b_input.data)
+
+    def textCB(self,textInput):
+        self.forceOverlay.setText(textInput.data)
+        self.gpWidget.setText(textInput.data)
 
     def pinchCB(self,emptyInput):
         self.gpWidget.addPOI()

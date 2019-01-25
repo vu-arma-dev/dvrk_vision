@@ -7,8 +7,8 @@
   <arg name="scale" default=".95" />
   <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
-  <arg name="width" value="640" />
-  <arg name="height" value="480" />
+  <arg name="width" value="2560" />
+  <arg name="height" value="720" />
 
   <include file="$(find dvrk_vision)/launch/just_cams.launch">
 
@@ -16,11 +16,11 @@
     <arg name="height" value="$(arg height)" />
 
     <arg name = "device_left" value ="/dev/video0" />
-    <arg name = "device_right" value ="/dev/video2" />
+    <!-- <arg name = "device_right" value ="/dev/video1" /> -->
 
-    <arg name="single_image_from_camera" value="false" />
-    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/VU_VD4110_left_calibration_$(arg width)x$(arg height).yaml" />
-    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/VU_VD4110_right_calibration_$(arg width)x$(arg height).yaml"/>
+    <arg name="single_image_from_camera" value="true" />
+    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/eAP870_calibration_left_$(arg width)x$(arg height).yaml" />
+    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/eAP870_calibration_right_$(arg width)x$(arg height).yaml"/>
     
     <arg name="transform_yaml" default="$(arg camera_registration)"/>
     <arg name="camera_parent" default="$(arg slave)_SIM_psm_base_link"/>
