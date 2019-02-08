@@ -6,13 +6,15 @@
       args="-j /home/arma/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/vu-dVRK/console-PSM2_VU.json"
       output="screen"/>
 
-  <include file="$(find dvrk_vision)/launch/dvrk_registration.launch">
-    <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />    
-    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/misumi0_calibration_$(arg width)x$(arg height).yaml" />
-    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/misumi1_calibration_$(arg width)x$(arg height).yaml"/>
-    <arg name="arm" default="PSM2" />
-    <arg name="width" value="640" />
-    <arg name="height" value="480" />
-  </include>
+  <include file="$(find dvrk_vision)/launch/just_cams_VU.launch" />
+
+  <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />    
+  <arg name="arm" default="PSM2" />
+
+  <node ns="stereo" pkg="dvrk_vision" type="dvrk_registration.py"
+        name="registration" output="screen" required="true">
+    <param name="registration_yaml" value="$(arg yaml)" />
+    <param name="arm" value="$(arg arm)"/>
+  </node>
 
 </launch>
