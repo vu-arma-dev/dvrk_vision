@@ -7,6 +7,7 @@ from std_msgs.msg import Int32
 from std_msgs.msg import Bool
 from std_msgs.msg import String
 from std_msgs.msg import Empty
+from sensor_msgs.msg import Joy
 import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
@@ -110,10 +111,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                         data_class=String,
                                         callback=self.textCB,
                                         queue_size=1)
-        # self.pinchSub = rospy.Subscriber(name='/dvrk/MTMR/gripper_pinch_event', 
-        #                                 data_class=Empty,
-        #                                 callback=self.pinchCB,
-        #                                 queue_size=1)
+        self.camSub = rospy.Subscriber(name='/dvrk/footpedals/camera', 
+                                         data_class=Joy,
+                                         callback=self.camCB,
+                                         queue_size=1)
 
     def tabChanged(self):
         idx = self.tabWidget.currentIndex()
@@ -149,11 +150,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.forceOverlay.setBarVisibility(b_input=b_input.data)
 
     def textCB(self,textInput):
-        self.forceOverlay.setText(textInput.data)
-        self.gpWidget.setText(textInput.data)
+        pass
+        # self.forceOverlay.setText(textInput.data)
+        # self.gpWidget.setText(textInput.data)
 
-    def pinchCB(self,emptyInput):
-        self.gpWidget.addPOI()
+    def camCB(self,dataInput):
+        if dataInput.buttons:
+            self.gpWidget.addPOI()
 
 if __name__ == "__main__":
     from tf import transformations

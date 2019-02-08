@@ -27,7 +27,7 @@ from dvrk_vision.overlay_gui import vtkRosTextureActor
 from dvrk_vision.vtk_stereo_viewer import QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
 from dvrk_vision import uvtoworld
-from force_overlay import makeTextActor
+from force_overlay import makeTextActor3D
 
 class vtkTimerCallback(object):
     def __init__(self, renWin):

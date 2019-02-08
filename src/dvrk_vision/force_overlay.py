@@ -57,10 +57,13 @@ def makeTextActor3D(text="Palpate Left to Right"):
     textMapper.SetInputConnection(vecText.GetOutputPort())
     textActor = vtk.vtkFollower()
     textActor.SetMapper(textMapper)
-    textActor.SetScale(0.01,0.01, 0.01)
-    textActor.SetOrientation(0,0,-180)
+    textActor.SetPosition(.00,0.0,0.219)
+    textActor.SetScale(.03,.03,.03)
+    textActor.SetOrientation(0,180,180)
     txtProp = textActor.GetProperty()
     txtProp.SetColor(1,0,0)
+
+    
 
     return textActor,vecText
 
@@ -127,21 +130,20 @@ class ForceOverlayWidget(QVTKStereoViewer):
         self.iren.RemoveObservers('MiddleButtonPressEvent')
         self.currentForce = [0,0,0]
 
-
         # Change camera location/orientation to get text facing upright
         # This completely breaks the tracking of the force bar with the robot, but does get the text looking ok (as long as you switch the left and right...)
-        cam = vtk.vtkCamera()
-        cam.SetFocalPoint(0,0,-1)
-        cam.SetViewUp(0,1,0)
-        self.ren.SetActiveCamera(cam)
+        # cam = vtk.vtkCamera()
+        # cam.SetFocalPoint(0,0,-1)
+        # cam.SetViewUp(0,-1,0)
+        # self.ren.SetActiveCamera(cam)
 
         if self.masterWidget is not None:
             self.textActor = self.masterWidget.textActor
         else:
             [self.textActor,self.vecText] = makeTextActor3D()
-            self.textActor.SetPosition(-0.04,0.04,0.75)
-            self.textActor.SetOrientation(0,0,0)
-            self.vecText.SetText("TEST")
+            # self.textActor.SetPosition(-0.04,0.04,0.75)
+            # self.textActor.SetOrientation(0,0,0)
+            # self.vecText.SetText("TEST")
         self.ren.AddActor(self.textActor)
 
         if self.drawType == "arrow":
@@ -253,12 +255,14 @@ class ForceOverlayWidget(QVTKStereoViewer):
             posMat = posemath.toMatrix(pos2)
             setActorMatrix(self.bar, posMat)
             setActorMatrix(self.greenLine, posMat)
+            # setActorMatrix(self.textActor,posMat) #I don't know why this doesn't work...
 
             # Scale color bar
             fp2 = [0, .5, 1]
             scalePos = np.interp(force, xp, fp2)
             posMat[1,0:3] = posMat[1,0:3] * scalePos
             setActorMatrix(self.forceBar, posMat)
+            
 
         return image
 
