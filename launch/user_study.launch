@@ -10,7 +10,7 @@
   <arg name="width" value="640" />
   <arg name="height" value="480" />
 
-  <include file="$(find dvrk_vision)/launch/just_cams_VU.launch" />
+  <include file="$(find dvrk_vision)/launch/just_cams_sparkfun.launch" />
   
   <node ns="stereo" name="main_gui" type="user_study_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="camera_registration" value="$(arg camera_registration)" />
