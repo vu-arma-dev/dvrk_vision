@@ -150,9 +150,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.forceOverlay.setBarVisibility(b_input=b_input.data)
 
     def textCB(self,textInput):
-        pass
-        # self.forceOverlay.setText(textInput.data)
+        self.forceOverlay.setText(textInput.data)
         # self.gpWidget.setText(textInput.data)
+        pass
+        
 
     def camCB(self,dataInput):
         if dataInput.buttons:
@@ -185,6 +186,10 @@ if __name__ == "__main__":
     mainWin = MainWindow(cams.camL, camSync, camTransform, psmName)
     secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin)
     mainWin.show()
+    mainWin.move(QtWidgets.QApplication.desktop().screenGeometry(1).bottomLeft())
+    mainWin.showMaximized()
     secondWin.show()
+    secondWin.move(QtWidgets.QApplication.desktop().screenGeometry(2).bottomLeft())
+    secondWin.showMaximized()
 
     sys.exit(app.exec_())

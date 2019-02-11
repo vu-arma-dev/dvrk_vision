@@ -57,8 +57,8 @@ def makeTextActor3D(text="Palpate Left to Right"):
     textMapper.SetInputConnection(vecText.GetOutputPort())
     textActor = vtk.vtkFollower()
     textActor.SetMapper(textMapper)
-    textActor.SetPosition(.00,0.0,0.219)
-    textActor.SetScale(.03,.03,.03)
+    textActor.SetPosition(-.065,0.03,0.25)
+    textActor.SetScale(.008,.008,.008)
     textActor.SetOrientation(0,180,180)
     txtProp = textActor.GetProperty()
     txtProp.SetColor(1,0,0)
@@ -139,6 +139,7 @@ class ForceOverlayWidget(QVTKStereoViewer):
 
         if self.masterWidget is not None:
             self.textActor = self.masterWidget.textActor
+            self.vecText = self.masterWidget.vecText
         else:
             [self.textActor,self.vecText] = makeTextActor3D()
             # self.textActor.SetPosition(-0.04,0.04,0.75)
