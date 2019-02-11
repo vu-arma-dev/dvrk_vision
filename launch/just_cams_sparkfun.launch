@@ -18,10 +18,10 @@
 
     <arg name="single_image_from_camera" value="true" />
 
-<!--     <arg name="image_format" default="raw"/>
-    <arg name="format" value="YUYV"/> -->
-    <arg name="image_format" default="compressed"/>
-    <arg name="format" value="jpeg"/>
+    <arg name="image_format" default="raw"/>
+    <arg name="format" value="YUYV"/>
+  <!--   <arg name="image_format" default="compressed"/>
+    <arg name="format" value="jpeg"/> -->
 
     <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/SPARKFUN_left_calibration_$(arg width)x$(arg height).yaml" />
     <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/SPARKFUN_right_calibration_$(arg width)x$(arg height).yaml"/>
