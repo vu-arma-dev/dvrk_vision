@@ -44,13 +44,6 @@
         <number>6</number>
        </property>
        <item>
-        <widget class="QLabel" name="opacityLabel">
-         <property name="text">
-          <string>Overlay opacity</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QSlider" name="opacitySlider">
          <property name="maximum">
           <number>255</number>
