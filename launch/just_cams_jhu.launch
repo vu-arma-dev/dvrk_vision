@@ -1,0 +1,33 @@
+<launch>
+
+  <arg name="namespace" default="/dvrk/"/>
+  <arg name="slave" default="PSM1"/>   
+  <arg name="scale" default=".95" />
+  <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_jhu.yaml" />
+
+  <arg name="width" value="1600" />
+  <arg name="height" value="600" />
+
+  <include file="$(find dvrk_vision)/launch/just_cams.launch">
+
+    <arg name="width" value="$(arg width)" />
+    <arg name="height" value="$(arg height)" />
+
+    <arg name = "device_left" value ="/dev/video0" />
+
+    <arg name="single_image_from_camera" value="true" />
+    <arg name="camera_info_url_left" value="file://$(find dvrk_vision)/defaults/eAP870_calibration_left_$(arg width)x$(arg height).yaml" />
+    <arg name="camera_info_url_right" value="file://$(find dvrk_vision)/defaults/eAP870_calibration_right_$(arg width)x$(arg height).yaml"/>
+    
+    <arg name="transform_yaml" default="$(arg camera_registration)"/>
+    <arg name="camera_parent" default="$(arg slave)_SIM_psm_base_link"/>
+    <arg name="skip_frames" default="2"/>
+    <arg name="exposure" default="40" />
+    <arg name="white_balance" default="4800" />
+    <arg name="auto_white_balance" default="0" />
+    <arg name="auto_exposure" default="1"/>
+    <arg name="saturation" default="50" />
+    <arg name="brightness" default="0" />
+    <arg name="hue" default="180" />
+  </include>
+</launch>

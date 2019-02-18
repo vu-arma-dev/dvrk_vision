@@ -1,14 +1,10 @@
 <launch>
 
   <arg name="namespace" default="/dvrk/"/>
-  <arg name="master" default="MTMR"/>   
   <arg name="slave" default="PSM2"/>   
-  <arg name="nri_config" default="$(find dvrk_nri_robot)/config/cmu-dVRK/nri-console-$(arg master)-$(arg slave)-Teleop.json"/>
   <arg name="scale" default=".95" />
   <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
-<!--   <arg name="width" value="2560" />
-  <arg name="height" value="720" /> -->
   <arg name="width" value="1600" />
   <arg name="height" value="600" />
 
