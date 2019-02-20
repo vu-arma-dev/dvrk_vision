@@ -32,6 +32,7 @@ from dvrk_vision.vtk_stereo_viewer import QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
 from dvrk_vision import uvtoworld
 from force_overlay import makeTextActor3D
+import vtktools
 
 #For Force bar
 from geometry_msgs.msg import WrenchStamped, PoseStamped
@@ -40,6 +41,9 @@ from dvrk_vision.tf_sync import CameraSync
 import PyKDL
 from tf_conversions import posemath
 import colorsys
+
+# Registration file parsing
+import yaml
 
 def setActorMatrix(actor, npMatrix):
     """ Set a VTK actor's transformation based on a 4x4 homogenous transform
@@ -50,6 +54,24 @@ def setActorMatrix(actor, npMatrix):
     actor.SetPosition(transform.GetPosition())
     actor.SetOrientation(transform.GetOrientation())
     actor.SetScale(transform.GetScale())
+
+def getActorMatrix(actor):
+    """ Set a VTK actor's transformation based on a 4x4 homogenous transform
+    """
+    # transform = vtk.vtkTransform()
+    # transform.Identity()
+    # # transform.SetMatrix(npMatrix.ravel())
+    # transform.SetPosition(actor.GetPosition())
+    # transform.SetOrientation(actor.GetOrientation())
+    # transform.SetScale(actor.GetScale())
+    mat = actor.GetMatrix()
+    retval = np.zeros((4,4))
+    for i in range(4):
+        for j in range(4):
+            retval[i,j] = mat.GetElement(i,j)
+    return retval
+    # return vtktools.vtkMatrixtoNpMatrix(actor.GetMatrix())
+
 
 class vtkTimerCallback(object):
     def __init__(self, renWin):
@@ -194,6 +216,7 @@ class UserWidget(QWidget):
 
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
+        self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
 
         self.organFrame = None
 
@@ -220,13 +243,17 @@ class UserWidget(QWidget):
 
         # Force bar TEMP TODO: REMOVE THIS FROM BEING HARDCODED
         psmName = rospy.get_param('~psm_name')
-        filePath = rospy.get_param('~camera_registration')
+        self.filePath = rospy.get_param('~camera_registration')
 
-        import yaml
-        print(filePath)
-        with open(filePath, 'r') as f:
+        print(self.filePath)
+        with open(self.filePath, 'r') as f:
             data = yaml.load(f)
-        camTransform = data['transform']
+        try:
+            camTransform = data['vtkTransform']
+        except KeyError:
+            rospy.logwarn("No vtk transform found. Using default camera transformation")
+            camTransform = data['transform']
+        self.organMatrix = np.array(data['moveMat'])
 
         frameRate = 15
         slop = 1.0 / frameRate
@@ -241,6 +268,15 @@ class UserWidget(QWidget):
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
 
+    def interactionChange(self, obj, event):
+        if event == "EndInteractionEvent":
+            with open(self.filePath, 'r') as f:
+                data = yaml.load(f)
+            mat = getActorMatrix(self.actorGroup)
+            organLetter=rospy.get_param('/organ_letter')
+            data['moveMat'] = mat.tolist()
+            with open(self.filePath, 'w') as f:
+                yaml.dump(data,f)
     def sliderChanged(self):
         self.actorOrgan.GetProperty().SetOpacity(self.opacitySlider.value() / 255.0)
         self.gpActor.GetProperty().SetOpacity(self.opacitySlider.value() / 255.0)
@@ -297,9 +333,6 @@ class UserWidget(QWidget):
             self.vtkWidget.ren.AddActor(self.bar)
             self.vtkWidget.ren.AddActor(self.forceBar)
             self.vtkWidget.ren.AddActor(self.greenLine)
-            self.bar.VisibilityOn()
-            self.forceBar.VisibilityOn()
-            self.greenLine.VisibilityOn()
 
             # Add text actor
             self.textActor= self.masterWidget.textActor
@@ -366,6 +399,7 @@ class UserWidget(QWidget):
         self.vtkWidget.ren.AddActor(self.actorGroup)
         self.vtkWidget.ren.AddActor(self.textActor)
 
+        setActorMatrix(self.actorGroup,self.organMatrix)
 
         # Make two color bars to show current force
         source = vtk.vtkCubeSource()
@@ -575,6 +609,9 @@ class UserWidget(QWidget):
             return image
         # Get current force
         fmsg = self.camSync.getMsg(self.forceTopic)
+        # print "Getting wrench"
+        # print fmsg
+        # print type(fmsg)
         if type(fmsg) is not WrenchStamped:
             return image
         force = [fmsg.wrench.force.x, fmsg.wrench.force.y, fmsg.wrench.force.z]
@@ -586,6 +623,7 @@ class UserWidget(QWidget):
         fp = [0, 1, 0]
         colorPos = np.interp(force, xp, fp)
         color = colorsys.hsv_to_rgb(colorPos**3 / 3, .8,1)
+
 
         # Get robot pose
         posMsg = self.camSync.getMsg(self.dvrkTopic)
@@ -602,8 +640,7 @@ class UserWidget(QWidget):
         posMat = posemath.toMatrix(pos2)
         setActorMatrix(self.bar, posMat)
         setActorMatrix(self.greenLine, posMat)
-        # setActorMatrix(self.textActor,posMat) #I don't know why this doesn't work...
-
+        print posMat
         # Scale color bar
         fp2 = [0, .5, 1]
         scalePos = np.interp(force, xp, fp2)

@@ -6,7 +6,7 @@
       args="-j /home/arma/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/vu-dVRK/console-PSM2_VU.json"
       output="screen"/>
 
-  <include file="$(find dvrk_vision)/launch/just_cams_VU.launch" />
+  <include file="$(find dvrk_vision)/launch/just_cams_vu.launch" />
 
   <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />    
   <arg name="arm" default="PSM2" />

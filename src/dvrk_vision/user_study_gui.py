@@ -88,6 +88,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def forceBarCB(self,b_input):
         self.userWidget.setBarVisibility(b_input=b_input.data)
+        print "Force Vision"
+        print b_input
 
     def textCB(self,textInput):
         self.userWidget.setText(textInput.data)
@@ -95,7 +97,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def opacityCB(self,newValue):
         self.userWidget.opacitySlider.setValue(newValue.data)
         self.userWidget.textureCheckBox.setChecked(False)
-
 
     def camCB(self,dataInput):
         if dataInput.buttons:
@@ -135,9 +136,9 @@ if __name__ == "__main__":
     mainWin.move(QtWidgets.QApplication.desktop().screenGeometry(1).bottomLeft())
     
     # TODO uncomment for proper use, add ros interfaces for default screen choice
-    # mainWin.showMaximized()
+    mainWin.showMaximized()
     secondWin.show()
     secondWin.move(QtWidgets.QApplication.desktop().screenGeometry(2).bottomLeft())
-    # secondWin.showMaximized()
+    secondWin.showMaximized()
 
     sys.exit(app.exec_())
