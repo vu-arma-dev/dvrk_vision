@@ -245,16 +245,15 @@ class UserWidget(QWidget):
         psmName = rospy.get_param('~psm_name')
         self.filePath = rospy.get_param('~camera_registration')
 
-        print(self.filePath)
+        organLetter=rospy.get_param('/organ_letter')
         with open(self.filePath, 'r') as f:
             data = yaml.load(f)
+        camTransform = data['transform']
         try:
-            camTransform = data['vtkTransform']
+            self.organMatrix = np.array(data['vtkTransform'+organLetter])
         except KeyError:
             rospy.logwarn("No vtk transform found. Using default camera transformation")
-            camTransform = data['transform']
-        self.organMatrix = np.array(data['moveMat'])
-
+            self.organMatrix =np.eye(4) 
         frameRate = 15
         slop = 1.0 / frameRate
         cams = StereoCameras("stereo/left/image_rect",
@@ -274,7 +273,7 @@ class UserWidget(QWidget):
                 data = yaml.load(f)
             mat = getActorMatrix(self.actorGroup)
             organLetter=rospy.get_param('/organ_letter')
-            data['moveMat'] = mat.tolist()
+            data['vtkTransform'+organLetter] = mat.tolist()
             with open(self.filePath, 'w') as f:
                 yaml.dump(data,f)
     def sliderChanged(self):
