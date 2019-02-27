@@ -99,11 +99,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.userWidget.textureCheckBox.setChecked(False)
 
     def camCB(self,dataInput):
-        if dataInput.buttons:
+        if dataInput.buttons[0]:
             self.userWidget.addPOI()
 
     def camMinusCB(self,dataInput):
-        if dataInput.buttons:
+        if dataInput.buttons[0]:
             self.userWidget.clearPOI()
 
 if __name__ == "__main__":

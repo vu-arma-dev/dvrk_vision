@@ -221,7 +221,6 @@ class UserWidget(QWidget):
         self.organFrame = None
 
         self.textureCheckBox.setText("Show GP mesh")
-
         self.POICheckBox = QCheckBox("Show markers", self)
         self.POICheckBox.setChecked(True)
         self.POICheckBox.stateChanged.connect(self.checkBoxChanged)
@@ -337,6 +336,7 @@ class UserWidget(QWidget):
             self.textActor= self.masterWidget.textActor
             self.vecText= self.masterWidget.vecText
             self.vtkWidget.ren.AddActor(self.textActor)
+            self.textureCheckBox.setChecked(False)
             return
 
         self.actorGroup = vtk.vtkAssembly()
@@ -520,7 +520,7 @@ class UserWidget(QWidget):
         self.stiffness = multiArrayToMatrixList(stiffness).transpose()
 
     def update(self):
-        if not self.isVisible():
+        if (not self.isVisible()):
             return
         if len(self.points) < 2:
             return
@@ -639,7 +639,6 @@ class UserWidget(QWidget):
         posMat = posemath.toMatrix(pos2)
         setActorMatrix(self.bar, posMat)
         setActorMatrix(self.greenLine, posMat)
-        print posMat
         # Scale color bar
         fp2 = [0, .5, 1]
         scalePos = np.interp(force, xp, fp2)
