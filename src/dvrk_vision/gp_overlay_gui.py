@@ -458,11 +458,11 @@ class GpOverlayWidget(QWidget):
         # stiffMap[stiffMap < np.mean(stiffMap)] = np.mean(stiffMap)
         stiffMap -= np.min(stiffMap)
         stiffMap /= np.max(stiffMap)
-        scale = 255 * 0.3
-        r = np.clip(stiffMap * 3, 0, 1) * scale
-        g = np.clip(stiffMap * 3 - 1, 0, 1) * scale
-        b = np.clip(stiffMap * 3 - 2, 0, 1) * scale
-        stiffImg = np.dstack((b, g, r)).astype(np.uint8)
+        scale = 255
+        color = cv2.applyColorMap((np.stack((stiffMap,)*3, axis=-1) * scale).astype(np.uint8), cv2.COLORMAP_PARULA)
+        minAlpha = 0.5
+        a = (stiffMap * (1-minAlpha) + minAlpha) * scale
+        stiffImg = np.stack((color[:,:,0], color[:,:,1], color[:,:,2], a), axis=-1).astype(np.uint8)
         shape = self.texture.shape
         stiffImg = cv2.resize(stiffImg, (shape[1], shape[0]))
         img = self.texture.copy()
