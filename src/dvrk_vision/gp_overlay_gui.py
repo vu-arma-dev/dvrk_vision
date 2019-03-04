@@ -281,7 +281,7 @@ class GpOverlayWidget(QWidget):
 
         # Set texture to default
         self.resolution = 512
-        self.texture = np.ones((self.resolution, self.resolution, 3), np.uint8) * 255
+        self.texture = np.ones((self.resolution, self.resolution, 4), np.uint8) * 255
         self.actorOrgan.setTexture(self.texture.copy())
         self.actorOrgan.textureOnOff(True)
         self.actorOrgan.GetProperty().LightingOn()
@@ -450,17 +450,17 @@ class GpOverlayWidget(QWidget):
         # stiffMap[stiffMap < np.mean(stiffMap)] = np.mean(stiffMap)
         stiffMap -= np.min(stiffMap)
         stiffMap /= np.max(stiffMap)
-        scale = 255 * 0.3
-        r = np.clip(stiffMap * 3, 0, 1) * scale
-        g = np.clip(stiffMap * 3 - 1, 0, 1) * scale
-        b = np.clip(stiffMap * 3 - 2, 0, 1) * scale
-        stiffImg = np.dstack((b, g, r)).astype(np.uint8)
+        scale = 255
+        print(stiffMap.shape)
+        color = cv2.applyColorMap((np.stack((stiffMap,)*3, axis=-1) * scale).astype(np.uint8), cv2.COLORMAP_PARULA)
+        print(color.shape)
+        minAlpha = 0.5
+        a = (stiffMap * (1-minAlpha) + minAlpha) * scale
+        stiffImg = np.stack((color[:,:,0], color[:,:,1], color[:,:,2], a), axis=-1).astype(np.uint8)
         shape = self.texture.shape
         stiffImg = cv2.resize(stiffImg, (shape[1], shape[0]))
-        img = self.texture.copy()
-        img = np.subtract(img, stiffImg.astype(int))
-        img = np.clip(img, 0, 255).astype(np.uint8)
-        self.actorOrgan.setTexture(img)
+        
+        self.actorOrgan.setTexture(stiffImg)
         self.actorOrgan.textureOnOff(True)
         self.actorOrgan.GetProperty().LightingOn()
 
