@@ -36,8 +36,6 @@ import vtktools
 
 #For Force bar
 from geometry_msgs.msg import WrenchStamped, PoseStamped
-from dvrk_vision.vtk_stereo_viewer import StereoCameras
-from dvrk_vision.tf_sync import CameraSync
 import PyKDL
 from tf_conversions import posemath
 import colorsys
@@ -182,14 +180,15 @@ def makeSphere(radius):
 
 class UserWidget(QWidget):
     bridge = CvBridge()
-    def __init__(self, camera, tfBuffer, markerTopic, robotFrame, tipFrame, cameraFrame, masterWidget=None, parent=None):
+    def __init__(self, camera, camSync, markerTopic, robotFrame, tipFrame, cameraFrame, masterWidget=None, parent=None):
         super(UserWidget, self).__init__(parent=parent)
         # Load in variables
-        self.tfBuffer = tfBuffer
+        self.tfBuffer = camSync._tfBuffer
         self.robotFrame = robotFrame
         self.tipFrame = tipFrame
         self.markerTopic = markerTopic
         self.cameraFrame = cameraFrame
+        self.camSync = camSync
         self.masterWidget = masterWidget
 
         uiPath = cleanResourcePath("package://dvrk_vision/src/dvrk_vision/overlay_widget.ui")
@@ -261,7 +260,6 @@ class UserWidget(QWidget):
                          "stereo/right/camera_info",
                          slop = slop)
         self.cameraTransform = arrayToPyKDLFrame(camTransform)
-        self.camSync = CameraSync("left/camera_info")
         self.dvrkTopic = '/dvrk/' + psmName + "/position_cartesian_current"
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
@@ -497,6 +495,15 @@ class UserWidget(QWidget):
             transformCam = vtk.vtkTransform()
             transformCam.SetMatrix(matCam.ravel())
 
+            extension = os.path.splitext(filename)[1].lower()
+
+            # Replace with OBJ if possible for texture coordinates
+            if extension == 'stl' or extension == 'ply':
+                if os.path.isfile(filename[0:-3] + 'obj'):
+                    filename = filename[0:-3] + 'obj'
+                else:
+                    rospy.logwarn_throttle(30, "Unable to find .obj for " + filename + ". Texture coordinates may be incorrect")
+
             polydata = loadMesh(meshPath, 1)
 
             # Scale STL
@@ -670,6 +677,8 @@ if __name__ == '__main__':
     import sys
     from dvrk_vision import vtktools
     from dvrk_vision.vtk_stereo_viewer import StereoCameras
+    from dvrk_vision.tf_sync import CameraSync
+
     app = QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()
@@ -682,12 +691,14 @@ if __name__ == '__main__':
     cameraFrame = "stereo_camera_frame"
     frameRate = 15
     slop = 1.0 / frameRate
-    cams = StereoCameras("stereo/left/image_rect",
-                         "stereo/right/image_rect",
-                         "stereo/left/camera_info",
-                         "stereo/right/camera_info",
+    cams = StereoCameras("/stereo/left/image_rect",
+                         "/stereo/right/image_rect",
+                         "/stereo/left/camera_info",
+                         "/stereo/right/camera_info",
                          slop = slop)
-    windowL = UserWidget(cams.camL, markerTopic, robotFrame, cameraFrame)
+
+    camSync = CameraSync("/stereo/left/camera_info")
+    windowL = UserWidget(cams.camL, camSync, markerTopic, robotFrame, cameraFrame)
     windowL.show()
     # windowR = OverlayWidget(cams.camR, meshPath, scale=stlScale, masterWidget=windowL)
     sys.exit(app.exec_())
