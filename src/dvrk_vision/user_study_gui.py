@@ -11,9 +11,7 @@ import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
 import dvrk_vision.vtktools as vtktools
-from dvrk_vision.tf_sync import CameraSync
 from dvrk_vision.user_widget import UserWidget
-from dvrk_vision.vtk_stereo_viewer import StereoCameras
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -30,7 +28,7 @@ class MainWindow(QtWidgets.QMainWindow):
         cameraFrame = rospy.get_param('~camera_frame')
 
         self.userWidget = UserWidget(camera,
-                                        cameraSync._tfBuffer,
+                                        camSync,
                                         markerTopic,
                                         robotFrame,
                                         tipFrame,
@@ -60,6 +58,11 @@ class MainWindow(QtWidgets.QMainWindow):
                                          callback=self.camCB,
                                          queue_size=1)
 
+        self.camMinusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_plus', 
+                                         data_class=Joy,
+                                         callback=self.camPlusCB,
+                                         queue_size=1)
+
         self.camMinusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_minus', 
                                          data_class=Joy,
                                          callback=self.camMinusCB,
@@ -69,7 +72,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                         data_class=Int32,
                                         callback=self.opacityCB,
                                         queue_size=1)
-        self.hideButtons()
+        # self.hideButtons()
 
     def closeEvent(self, qCloseEvent):
         for window in self.otherWindows:
@@ -100,15 +103,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def camCB(self,dataInput):
         if dataInput.buttons[0]:
+            self.userWidget.clearPOI()
+
+    def camPlusCB(self,dataInput):
+        if dataInput.buttons[0]:
             self.userWidget.addPOI()
 
     def camMinusCB(self,dataInput):
         if dataInput.buttons[0]:
-            self.userWidget.clearPOI()
+            self.userWidget.removePOI()
+            
 
 if __name__ == "__main__":
     from tf import transformations
     import yaml
+    from dvrk_vision.vtk_stereo_viewer import StereoCameras
+    from dvrk_vision.tf_sync import CameraSync
+
     app = QtWidgets.QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()

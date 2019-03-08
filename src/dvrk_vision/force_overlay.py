@@ -50,7 +50,7 @@ def makeTextActor(text="Move around and do some stuff"):
     return textActor
 
 # Make a 3D text actor
-def makeTextActor3D(text="Palpate Left to Right"):
+def makeTextActor3D(text="Uninitialized"):
     vecText = vtk.vtkVectorText()
     vecText.SetText(text)
     textMapper = vtk.vtkPolyDataMapper()
@@ -62,9 +62,6 @@ def makeTextActor3D(text="Palpate Left to Right"):
     textActor.SetOrientation(0,180,180)
     txtProp = textActor.GetProperty()
     txtProp.SetColor(1,0,0)
-
-    
-
     return textActor,vecText
 
 def setActorMatrix(actor, npMatrix):

@@ -31,7 +31,6 @@ from dvrk_vision.overlay_gui import vtkRosTextureActor
 from dvrk_vision.vtk_stereo_viewer import QVTKStereoViewer
 from dvrk_vision.clean_resource_path import cleanResourcePath
 from dvrk_vision import uvtoworld
-from force_overlay import makeTextActor3D
 import vtktools
 
 #For Force bar
@@ -42,6 +41,21 @@ import colorsys
 
 # Registration file parsing
 import yaml
+
+# Make a 3D text actor
+def makeTextActor3D(text="Uninitialized"):
+    vecText = vtk.vtkVectorText()
+    vecText.SetText(text)
+    textMapper = vtk.vtkPolyDataMapper()
+    textMapper.SetInputConnection(vecText.GetOutputPort())
+    textActor = vtk.vtkFollower()
+    textActor.SetMapper(textMapper)
+    textActor.SetPosition(-.065,0.03,0.25)
+    textActor.SetScale(.007,.007,.007)
+    textActor.SetOrientation(0,180,180)
+    txtProp = textActor.GetProperty()
+    txtProp.SetColor(1,0,0)
+    return textActor,vecText
 
 def setActorMatrix(actor, npMatrix):
     """ Set a VTK actor's transformation based on a 4x4 homogenous transform
@@ -183,13 +197,13 @@ class UserWidget(QWidget):
     def __init__(self, camera, camSync, markerTopic, robotFrame, tipFrame, cameraFrame, masterWidget=None, parent=None):
         super(UserWidget, self).__init__(parent=parent)
         # Load in variables
-        self.tfBuffer = camSync._tfBuffer
         self.robotFrame = robotFrame
         self.tipFrame = tipFrame
         self.markerTopic = markerTopic
         self.cameraFrame = cameraFrame
-        self.camSync = camSync
         self.masterWidget = masterWidget
+        self.camSync = camSync
+        self.tfBuffer = self.camSync._tfBuffer
 
         uiPath = cleanResourcePath("package://dvrk_vision/src/dvrk_vision/overlay_widget.ui")
         # Get CV image from path
@@ -220,6 +234,7 @@ class UserWidget(QWidget):
         self.organFrame = None
 
         self.textureCheckBox.setText("Show GP mesh")
+        self.textureCheckBox.setChecked(True)
         self.POICheckBox = QCheckBox("Show markers", self)
         self.POICheckBox.setChecked(True)
         self.POICheckBox.stateChanged.connect(self.checkBoxChanged)
@@ -239,11 +254,10 @@ class UserWidget(QWidget):
         self.clearPOISub = rospy.Subscriber('/control/clearPOI',Empty,self.clearCB,queue_size=1)
         self.pausePOISub = rospy.Subscriber('/control/pausePOI',Bool,self.pauseCB,queue_size=1)
 
-        # Force bar TEMP TODO: REMOVE THIS FROM BEING HARDCODED
         psmName = rospy.get_param('~psm_name')
         self.filePath = rospy.get_param('~camera_registration')
 
-        organLetter=rospy.get_param('/organ_letter')
+        organLetter=str(rospy.get_param('/organ_letter'))
         with open(self.filePath, 'r') as f:
             data = yaml.load(f)
         camTransform = data['transform']
@@ -252,13 +266,7 @@ class UserWidget(QWidget):
         except KeyError:
             rospy.logwarn("No vtk transform found. Using default camera transformation")
             self.organMatrix =np.eye(4) 
-        frameRate = 15
-        slop = 1.0 / frameRate
-        cams = StereoCameras("stereo/left/image_rect",
-                         "stereo/right/image_rect",
-                         "stereo/left/camera_info",
-                         "stereo/right/camera_info",
-                         slop = slop)
+
         self.cameraTransform = arrayToPyKDLFrame(camTransform)
         self.dvrkTopic = '/dvrk/' + psmName + "/position_cartesian_current"
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
@@ -269,7 +277,7 @@ class UserWidget(QWidget):
             with open(self.filePath, 'r') as f:
                 data = yaml.load(f)
             mat = getActorMatrix(self.actorGroup)
-            organLetter=rospy.get_param('/organ_letter')
+            organLetter=str(rospy.get_param('/organ_letter'))
             data['vtkTransform'+organLetter] = mat.tolist()
             with open(self.filePath, 'w') as f:
                 yaml.dump(data,f)
@@ -293,12 +301,17 @@ class UserWidget(QWidget):
     def pauseCB(self,boolData):
         self.pausePOI = boolData.data
 
-    def clearPOI(self):        
+    def clearPOI(self):
         for actor in self.POI:
             self.actorGroup.RemovePart(actor)
             del actor
         self.POI = []
         self.clearPOIPub.publish(Empty())
+
+    def removePOI(self):
+        if (self.masterWidget is None) and len(self.POI)>0:
+            actor = self.POI.pop()
+            self.actorGroup.RemovePart(actor)
 
     def checkBoxPOIChanged(self):
         if(self.POICheckBox.isChecked()):
@@ -378,6 +391,8 @@ class UserWidget(QWidget):
         self.oldPoints = np.empty((0,3))
         self.stiffness = np.empty(0)
         self.points2D = np.empty((0,2))
+        # stiffSub = message_filters.Subscriber('/dvrk/GPspoof/get_stiffness', Float64MultiArray)
+        # pointsSub = message_filters.Subscriber('/dvrk/GPspoof/get_surface_points', Float64MultiArray)
         stiffSub = message_filters.Subscriber('/dvrk/GP/get_stiffness', Float64MultiArray)
         pointsSub = message_filters.Subscriber('/dvrk/GP/get_surface_points', Float64MultiArray)
         stiffSub.registerCallback(self.stiffnessCB)
@@ -385,7 +400,7 @@ class UserWidget(QWidget):
 
         # Set texture to default
         self.resolution = 512
-        self.texture = np.ones((self.resolution, self.resolution, 3), np.uint8) * 255
+        self.texture = np.ones((self.resolution, self.resolution, 4), np.uint8) * 255
         self.actorOrgan.setTexture(self.texture.copy())
         self.actorOrgan.textureOnOff(True)
         self.actorOrgan.GetProperty().LightingOn()
@@ -495,14 +510,15 @@ class UserWidget(QWidget):
             transformCam = vtk.vtkTransform()
             transformCam.SetMatrix(matCam.ravel())
 
-            extension = os.path.splitext(filename)[1].lower()
+            extension = os.path.splitext(meshPath)[-1].lower()
 
             # Replace with OBJ if possible for texture coordinates
-            if extension == 'stl' or extension == 'ply':
-                if os.path.isfile(filename[0:-3] + 'obj'):
-                    filename = filename[0:-3] + 'obj'
+            if extension == '.stl' or extension == '.ply':
+                if os.path.isfile(meshPath[0:-3] + 'obj'):
+                    meshPath = meshPath[0:-3] + 'obj'
                 else:
-                    rospy.logwarn_throttle(30, "Unable to find .obj for " + filename + ". Texture coordinates may be incorrect")
+                    rospy.logwarn_throttle(30, "Unable to find .obj for " + meshPath + ". Texture coordinates may be incorrect")
+            print(meshPath, extension)
 
             polydata = loadMesh(meshPath, 1)
 
@@ -520,15 +536,25 @@ class UserWidget(QWidget):
             self.converter = uvtoworld.UVToWorldConverter(organPolyData)
 
     def pointsCB(self, points):
+        # print("Getting Points")
         # Preetham's stuff is in millimeters
-        self.points = multiArrayToMatrixList(points) * 0.001
+        pts = multiArrayToMatrixList(points)
+        # print(len(pts))
+        self.points = pts * 0.001
 
     def stiffnessCB(self, stiffness):
+        # print("Getting Stiffness")
         self.stiffness = multiArrayToMatrixList(stiffness).transpose()
+        # print(len(self.stiffness))
 
     def update(self):
         if (not self.isVisible()):
             return
+        try:
+            pointLen = len(self.points)
+        except TypeError:
+            return
+
         if len(self.points) < 2:
             return
         if len(self.points) != len(self.stiffness) or self.meshPath == "":
@@ -545,6 +571,8 @@ class UserWidget(QWidget):
         points = np.matrix(matCam) * np.hstack((self.points, np.ones((self.points.shape[0],1)))).transpose()
         points = np.array(points.transpose()[:,0:3])
         scalars = self.stiffness
+        points = points[np.where(scalars > 0)[0], :]
+        scalars = scalars[np.where(scalars > 0)[0], :]
 
         self.gpPolyData.Reset()
         vtkPoints = vtk.vtkPoints()
@@ -557,10 +585,8 @@ class UserWidget(QWidget):
             minZ = np.min(scalars)
             maxZ = np.max(scalars)
             stiffness = (scalars - minZ) / (maxZ - minZ)
-            r = np.clip(stiffness * 3, 0, 1) * 255
-            g = np.clip(stiffness * 3 - 1, 0, 1) * 255
-            b = np.clip(stiffness * 3 - 2, 0, 1) * 255
-            for i, point in enumerate(np.hstack((points, r, g, b))):
+            color = cv2.applyColorMap((np.stack((stiffness,)*3, axis=-1) * 255).astype(np.uint8), cv2.COLORMAP_PARULA)
+            for i, point in enumerate(np.hstack((points, color[:,:,2], color[:,:,1], color[:,:,0]))):
                 colors.InsertNextTuple3(point[3], point[4], point[5])
                 pointId = vtkPoints.InsertNextPoint(point[0:3])
                 vtkCells.InsertNextCell(1)
@@ -594,17 +620,17 @@ class UserWidget(QWidget):
         # Normalize
         stiffMap -= np.min(stiffMap)
         stiffMap /= np.max(stiffMap)
-        scale = 255 * 0.3
-        r = np.clip(stiffMap * 3, 0, 1) * scale
-        g = np.clip(stiffMap * 3 - 1, 0, 1) * scale
-        b = np.clip(stiffMap * 3 - 2, 0, 1) * scale
-        stiffImg = np.dstack((b, g, r)).astype(np.uint8)
+        scale = 255
+        color = cv2.applyColorMap((np.stack((stiffMap,)*3, axis=-1) * scale).astype(np.uint8), cv2.COLORMAP_PARULA)
+        minAlpha = 0.25
+        a = (stiffMap * (1-minAlpha) + minAlpha) * scale
+        stiffImg = np.stack((color[:,:,0], color[:,:,1], color[:,:,2], a), axis=-1).astype(np.uint8)
         shape = self.texture.shape
         stiffImg = cv2.resize(stiffImg, (shape[1], shape[0]))
-        img = self.texture.copy()
-        img = np.subtract(img, stiffImg.astype(int))
-        img = np.clip(img, 0, 255).astype(np.uint8)
-        self.actorOrgan.setTexture(img)
+        # img = self.texture.copy()
+        # img = np.subtract(img, stiffImg.astype(int))
+        # img = np.clip(img, 0, 255).astype(np.uint8)
+        self.actorOrgan.setTexture(stiffImg)
         self.actorOrgan.textureOnOff(True)
         self.actorOrgan.GetProperty().LightingOn()
 
@@ -622,8 +648,8 @@ class UserWidget(QWidget):
             return image
         force = [fmsg.wrench.force.x, fmsg.wrench.force.y, fmsg.wrench.force.z]
         force = np.linalg.norm(force)
-        targetF = 3 # Newtons
-        targetMax = 6 # Newtons
+        targetF = 2 # Newtons
+        targetMax = 4 # Newtons
         # Calculate color
         xp = [0, targetF, targetMax]
         fp = [0, 1, 0]
@@ -642,7 +668,7 @@ class UserWidget(QWidget):
         pos = self.cameraTransform.Inverse() * pos
         pos2 = PyKDL.Frame(PyKDL.Rotation.Identity(), pos.p)
         pos2.M.DoRotZ(np.pi)
-        pos2.p = pos2.p + pos2.M.UnitX() * -.015# + pos2.M.UnitZ() * 0.01
+        pos2.p = pos2.p + pos2.M.UnitX() * -.025 - pos2.M.UnitY() * 0.02
         posMat = posemath.toMatrix(pos2)
         setActorMatrix(self.bar, posMat)
         setActorMatrix(self.greenLine, posMat)
@@ -678,7 +704,6 @@ if __name__ == '__main__':
     from dvrk_vision import vtktools
     from dvrk_vision.vtk_stereo_viewer import StereoCameras
     from dvrk_vision.tf_sync import CameraSync
-
     app = QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()
