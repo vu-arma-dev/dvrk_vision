@@ -118,6 +118,7 @@ if __name__ == "__main__":
     from tf import transformations
     import yaml
     from dvrk_vision.vtk_stereo_viewer import StereoCameras
+    rospy.init_node('user_study_gui')
     from dvrk_vision.tf_sync import CameraSync
 
     app = QtWidgets.QApplication(sys.argv)

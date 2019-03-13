@@ -13,7 +13,7 @@ from image_geometry import StereoCameraModel
 from sensor_msgs.msg import CameraInfo
 from geometry_msgs.msg import Pose
 from tf_conversions import posemath
-from tf_sync import CameraSync
+
 
 _WINDOW_NAME = "Registration"
 
@@ -273,6 +273,7 @@ def calculateRegistration(points, pointsCam):
 
 def main():
     rospy.init_node('dvrk_registration', anonymous=True)
+    from tf_sync import CameraSync
     psmName = rospy.get_param('~arm')
     robot = psm(psmName)
    
