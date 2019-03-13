@@ -1,15 +1,22 @@
 <launch>
-<!--
-  <node name="dvrk_jconsole"
+
+  <!--<node name="dvrk_jconsole"
       pkg="dvrk_robot" 
       type="dvrk_console_json" 
-      args="-j /home/pchalas1/catkin_ws/src/cisst-saw-nri/sawIntuitiveResearchKit/share/jhu-dVRK/console-PSM1.json"
-      output="screen"/>
+      args="-j $(find saw_intuitive_research_kit)/../share/jhu-dVRK/console-PSM1.json"
+      output="screen"/> 
+
+  <include file="$(find dvrk_vision)/launch/just_cams_jhu.launch" />
 -->
-  <include file="$(find dvrk_vision)/launch/dvrk_registration.launch">
-    <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_jhu.yaml" />
-    <arg name="arm" default="PSM1" />
-    <arg name="device_left" default="/dev/video2" />
-  </include>
+
+  <arg name="yaml" default="$(find dvrk_vision)/defaults/registration_params_jhu.yaml" />    
+  <arg name="arm" default="PSM1" />
+
+  <node ns="stereo" pkg="dvrk_vision" type="dvrk_registration.py"
+        name="registration" output="screen" required="true">
+    <param name="registration_yaml" value="$(arg yaml)" />
+    <param name="arm" value="$(arg arm)"/>
+  </node>
+
 
 </launch>
