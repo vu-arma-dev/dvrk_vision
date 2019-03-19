@@ -6,17 +6,29 @@ import rospy
 from std_msgs.msg import Int32
 from std_msgs.msg import Bool
 from std_msgs.msg import String
+from std_msgs.msg import Header
+from std_msgs.msg import Empty
 from sensor_msgs.msg import Joy
+from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseArray
 import rospkg
 from PyQt5 import QtWidgets, QtGui, QtCore
 from dvrk_vision.registration_gui import RegistrationWidget
 import dvrk_vision.vtktools as vtktools
 from dvrk_vision.user_widget import UserWidget
+import Queue
+
+def get_PSM_Position():
+    # Often can get an old message, reading twice will clear that out
+    slave_name = rospy.get_param('/slave')
+    rospy.wait_for_message('/dvrk/'+slave_name+'/position_cartesian_current',PoseStamped,1.0)
+    return rospy.wait_for_message('/dvrk/'+slave_name+'/position_cartesian_current',PoseStamped,1.0)
+
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, camera, cameraSync, camTransform, psmName, masterWidget = None):
-
+    def __init__(self, camera, cameraSync, camTransform, psmName, masterWidget = None, idNum=0):
+        self.idNum=idNum
         super(MainWindow, self).__init__()
 
         # Set up parent widget
@@ -27,8 +39,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tipFrame = rospy.get_param('~end_effector_frame')
         cameraFrame = rospy.get_param('~camera_frame')
 
+        self.allowPoints=False
         self.userWidget = UserWidget(camera,
-                                        camSync,
+                                        cameraSync,
                                         markerTopic,
                                         robotFrame,
                                         tipFrame,
@@ -43,6 +56,11 @@ class MainWindow(QtWidgets.QMainWindow):
             masterWidget.otherWindows.append(self)
             self.otherWindows.append(masterWidget)
 
+        self.allowPointsSub = rospy.Subscriber(name='/control/allowPoints', 
+                                        data_class=Bool,
+                                        callback=self.allowPointsCB,
+                                        queue_size=1)
+
         self.forceSub = rospy.Subscriber(name='/control/forceDisplay', 
                                         data_class=Bool,
                                         callback=self.forceBarCB,
@@ -53,10 +71,15 @@ class MainWindow(QtWidgets.QMainWindow):
                                         callback=self.textCB,
                                         queue_size=1)
 
-        self.camSub = rospy.Subscriber(name='/dvrk/footpedals/camera', 
-                                         data_class=Joy,
-                                         callback=self.camCB,
-                                         queue_size=1)
+        self.clearSub = rospy.Subscriber(name='/dvrk_vision/clear_POI',
+                                        data_class=Empty,
+                                        callback=self.clearPOICB,
+                                        queue_size=1)
+
+        # self.camSub = rospy.Subscriber(name='/dvrk/footpedals/camera', 
+        #                                  data_class=Joy,
+        #                                  callback=self.camCB,
+        #                                  queue_size=1)
 
         self.camMinusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_plus', 
                                          data_class=Joy,
@@ -72,7 +95,13 @@ class MainWindow(QtWidgets.QMainWindow):
                                         data_class=Int32,
                                         callback=self.opacityCB,
                                         queue_size=1)
+
+        self.displayPub = rospy.Publisher('/control/Vision_Point_List',PoseArray,latch=False,queue_size=1)
+
+        self.displayList=[]
+
         # self.hideButtons()
+
 
     def closeEvent(self, qCloseEvent):
         for window in self.otherWindows:
@@ -91,8 +120,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def forceBarCB(self,b_input):
         self.userWidget.setBarVisibility(b_input=b_input.data)
-        print "Force Vision"
-        print b_input
 
     def textCB(self,textInput):
         self.userWidget.setText(textInput.data)
@@ -101,18 +128,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.userWidget.opacitySlider.setValue(newValue.data)
         self.userWidget.textureCheckBox.setChecked(False)
 
-    def camCB(self,dataInput):
-        if dataInput.buttons[0]:
-            self.userWidget.clearPOI()
+    def allowPointsCB(self,b_input):
+        self.allowPoints=b_input.data
 
     def camPlusCB(self,dataInput):
-        if dataInput.buttons[0]:
+        if dataInput.buttons[0] and self.allowPoints:
             self.userWidget.addPOI()
 
+            if self.idNum==1:
+                curPoseMsg = get_PSM_Position()
+                self.displayList.append(curPoseMsg.pose)
+                self.publishDisplayList()
+                
     def camMinusCB(self,dataInput):
-        if dataInput.buttons[0]:
+        if dataInput.buttons[0] and self.allowPoints:
             self.userWidget.removePOI()
-            
+            if len(self.displayList)>0:
+                self.displayList.pop()
+                self.publishDisplayList()
+
+    def clearPOICB(self,emptyInput):
+        self.displayList=[]
+
+
+    def publishDisplayList(self):
+        header=Header()
+        header.stamp=rospy.Time.now()
+        self.displayPub.publish(PoseArray(header,self.displayList))
+        rospy.sleep(0.2)
 
 if __name__ == "__main__":
     from tf import transformations
@@ -143,7 +186,7 @@ if __name__ == "__main__":
     camTransform = data['transform']
 
     mainWin = MainWindow(cams.camL, camSync, camTransform, psmName)
-    secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin)
+    secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin,idNum=1)
     mainWin.show()
     mainWin.move(QtWidgets.QApplication.desktop().screenGeometry(1).bottomLeft())
     

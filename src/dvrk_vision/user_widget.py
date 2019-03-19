@@ -50,7 +50,7 @@ def makeTextActor3D(text="Uninitialized"):
     textMapper.SetInputConnection(vecText.GetOutputPort())
     textActor = vtk.vtkFollower()
     textActor.SetMapper(textMapper)
-    textActor.SetPosition(-.065,0.03,0.25)
+    textActor.SetPosition(-.065,0.03,0.22)
     textActor.SetScale(.007,.007,.007)
     textActor.SetOrientation(0,180,180)
     txtProp = textActor.GetProperty()
