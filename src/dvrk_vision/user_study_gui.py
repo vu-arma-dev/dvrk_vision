@@ -96,6 +96,11 @@ class MainWindow(QtWidgets.QMainWindow):
                                         callback=self.opacityCB,
                                         queue_size=1)
 
+        self.maximiseSub = rospy.Subscriber(name='/control/moveFront', 
+                                        data_class=Empty,
+                                        callback=self.moveCB,
+                                        queue_size=1)
+
         self.displayPub = rospy.Publisher('/control/Vision_Point_List',PoseArray,latch=False,queue_size=1)
 
         self.displayList=[]
@@ -150,6 +155,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def clearPOICB(self,emptyInput):
         self.displayList=[]
 
+    def moveCB(self,emptyInput):
+        self.raise_()
 
     def publishDisplayList(self):
         header=Header()
