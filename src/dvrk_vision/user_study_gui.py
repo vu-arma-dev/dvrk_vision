@@ -186,6 +186,9 @@ if __name__ == "__main__":
 
     psmName = rospy.get_param('~psm_name')
     filePath = rospy.get_param('~camera_registration')
+
+    screenOne = rospy.get_param('~screen_one')
+    screenTwo = rospy.get_param('~screen_two')
     
     print(filePath)
     with open(filePath, 'r') as f:
@@ -195,12 +198,12 @@ if __name__ == "__main__":
     mainWin = MainWindow(cams.camL, camSync, camTransform, psmName)
     secondWin = MainWindow(cams.camR, camSync, camTransform, psmName, masterWidget = mainWin,idNum=1)
     mainWin.show()
-    mainWin.move(QtWidgets.QApplication.desktop().screenGeometry(1).bottomLeft())
+    mainWin.move(QtWidgets.QApplication.desktop().screenGeometry(screenOne).bottomLeft())
     
     # TODO uncomment for proper use, add ros interfaces for default screen choice
     mainWin.showMaximized()
     secondWin.show()
-    secondWin.move(QtWidgets.QApplication.desktop().screenGeometry(2).bottomLeft())
+    secondWin.move(QtWidgets.QApplication.desktop().screenGeometry(screenTwo).bottomLeft())
     secondWin.showMaximized()
 
     sys.exit(app.exec_())

@@ -3,6 +3,8 @@
   <arg name="namespace" default="/dvrk/"/>
   <arg name="master" default="MTMR"/>   
   <arg name="slave" default="PSM2"/>   
+  <arg name="screen_one" default="1"/>
+  <arg name="screen_two" default="2"/>
   <arg name="scale" default=".95" />
   <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
@@ -15,6 +17,9 @@
     <param name="end_effector_frame" value="vf_point"/>
     <param name="psm_name" value="$(arg slave)"/>
     <param name="camera_frame" value="stereo_camera_frame"/>
+
+    <param name="screen_one" value="$(arg screen_one)"/>
+    <param name="screen_two" value="$(arg screen_two)"/>
   </node>
 
 </launch>
