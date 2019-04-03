@@ -76,11 +76,6 @@ class MainWindow(QtWidgets.QMainWindow):
                                         callback=self.clearPOICB,
                                         queue_size=1)
 
-        # self.camSub = rospy.Subscriber(name='/dvrk/footpedals/camera', 
-        #                                  data_class=Joy,
-        #                                  callback=self.camCB,
-        #                                  queue_size=1)
-
         self.camMinusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_plus', 
                                          data_class=Joy,
                                          callback=self.camPlusCB,
@@ -105,8 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.displayList=[]
 
-        # self.hideButtons()
-
+        self.hideButtons()
 
     def closeEvent(self, qCloseEvent):
         for window in self.otherWindows:
