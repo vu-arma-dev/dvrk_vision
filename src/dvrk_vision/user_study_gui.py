@@ -76,7 +76,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                         callback=self.clearPOICB,
                                         queue_size=1)
 
-        self.camMinusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_plus', 
+        self.camPlusSub = rospy.Subscriber(name='/dvrk/footpedals/cam_plus', 
                                          data_class=Joy,
                                          callback=self.camPlusCB,
                                          queue_size=1)
