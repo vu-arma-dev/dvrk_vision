@@ -229,7 +229,12 @@ class UserWidget(QWidget):
 
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
-        # self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
+
+        if not rospy.get_param('/university') == 'jhu':
+            self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
+        else:
+            self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
+
 
         self.organFrame = None
 
@@ -253,7 +258,6 @@ class UserWidget(QWidget):
         self.clearPOIPub    = rospy.Publisher('/dvrk_vision/clear_POI', Empty, latch = False, queue_size = 1)
         self.clearPOISub = rospy.Subscriber('/control/clearPOI',Empty,self.clearCB,queue_size=1)
         self.pausePOISub = rospy.Subscriber('/control/pausePOI',Bool,self.pauseCB,queue_size=1)
-        self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
 
         psmName = rospy.get_param('~psm_name')
         self.filePath = rospy.get_param('~camera_registration')
@@ -273,7 +277,16 @@ class UserWidget(QWidget):
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
 
-    # def interactionChange(self, obj, event):
+    def interactionChange(self, obj, event):
+        if event=="EndInteractionEvent":
+            with open(self.filePath, 'r') as f:
+                data = yaml.load(f)
+            mat = getActorMatrix(self.actorGroup)
+            organLetter=str(rospy.get_param('/organ_letter'))
+            data['vtkTransform'+organLetter] = mat.tolist()
+            with open(self.filePath, 'w') as f:
+                yaml.dump(data,f)
+
     def interactionCB(self,data):
         with open(self.filePath, 'r') as f:
             data = yaml.load(f)
