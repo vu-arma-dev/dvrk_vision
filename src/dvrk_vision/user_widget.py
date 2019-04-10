@@ -25,6 +25,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point
 from std_msgs.msg import Empty
 from std_msgs.msg import Bool
+from sensor_msgs.msg import Image, CameraInfo
 
 # DVRK vision stuff
 from dvrk_vision.overlay_gui import vtkRosTextureActor
@@ -276,6 +277,11 @@ class UserWidget(QWidget):
         self.dvrkTopic = '/dvrk/' + psmName + "/position_cartesian_current"
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
+
+        pubTopic = self.vtkWidget.cam.topic[:-len(self.vtkWidget.cam.topic.split('/')[-1])] + "image_rendered"
+        self.imagePub = rospy.Publisher(pubTopic, Image, queue_size=1)
+        self.winToImage = vtk.vtkWindowToImageFilter()
+        self.winToImage.SetInput(self.vtkWidget._RenderWindow)
 
     def interactionChange(self, obj, event):
         if event=="EndInteractionEvent":
@@ -652,6 +658,13 @@ class UserWidget(QWidget):
 
     # Bar processing
     def imageProc(self,image):
+        self.winToImage.Modified()
+        self.winToImage.Update()
+        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
+        shape = self.vtkWidget.cam.image.shape
+        out = cv2.resize(render, (shape[1], shape[0]))
+        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
+
         if self.masterWidget is not None:
             return image
         # Get current force
