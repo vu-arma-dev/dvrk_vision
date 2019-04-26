@@ -25,6 +25,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point
 from std_msgs.msg import Empty
 from std_msgs.msg import Bool
+from sensor_msgs.msg import Image, CameraInfo
 
 # DVRK vision stuff
 from dvrk_vision.overlay_gui import vtkRosTextureActor
@@ -229,7 +230,12 @@ class UserWidget(QWidget):
 
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
-        # self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
+
+        if not rospy.get_param('/university') == 'jhu':
+            self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
+        else:
+            self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
+
 
         self.organFrame = None
 
@@ -253,7 +259,6 @@ class UserWidget(QWidget):
         self.clearPOIPub    = rospy.Publisher('/dvrk_vision/clear_POI', Empty, latch = False, queue_size = 1)
         self.clearPOISub = rospy.Subscriber('/control/clearPOI',Empty,self.clearCB,queue_size=1)
         self.pausePOISub = rospy.Subscriber('/control/pausePOI',Bool,self.pauseCB,queue_size=1)
-        self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
 
         psmName = rospy.get_param('~psm_name')
         self.filePath = rospy.get_param('~camera_registration')
@@ -273,7 +278,21 @@ class UserWidget(QWidget):
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
 
-    # def interactionChange(self, obj, event):
+        pubTopic = self.vtkWidget.cam.topic[:-len(self.vtkWidget.cam.topic.split('/')[-1])] + "image_rendered"
+        self.imagePub = rospy.Publisher(pubTopic, Image, queue_size=1)
+        self.winToImage = vtk.vtkWindowToImageFilter()
+        self.winToImage.SetInput(self.vtkWidget._RenderWindow)
+
+    def interactionChange(self, obj, event):
+        if event=="EndInteractionEvent":
+            with open(self.filePath, 'r') as f:
+                data = yaml.load(f)
+            mat = getActorMatrix(self.actorGroup)
+            organLetter=str(rospy.get_param('/organ_letter'))
+            data['vtkTransform'+organLetter] = mat.tolist()
+            with open(self.filePath, 'w') as f:
+                yaml.dump(data,f)
+
     def interactionCB(self,data):
         with open(self.filePath, 'r') as f:
             data = yaml.load(f)
@@ -639,6 +658,13 @@ class UserWidget(QWidget):
 
     # Bar processing
     def imageProc(self,image):
+        self.winToImage.Modified()
+        self.winToImage.Update()
+        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
+        shape = self.vtkWidget.cam.image.shape
+        out = cv2.resize(render, (shape[1], shape[0]))
+        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
+
         if self.masterWidget is not None:
             return image
         # Get current force
