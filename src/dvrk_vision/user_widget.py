@@ -85,20 +85,6 @@ def getActorMatrix(actor):
     return retval
     # return vtktools.vtkMatrixtoNpMatrix(actor.GetMatrix())
 
-
-class vtkTimerCallback(object):
-    def __init__(self, renWin):
-        self.rate = rospy.Rate(30)
-        self.renWin = renWin
-
-    def execute(self, obj, event):
-        self.renWin.Render()
-        self.rate.sleep()
-        self.update()
-
-    def update(self):
-        pass
-
 ## Take a Float64 MultiArray message, convert it into a numpyMatrix
 def multiArrayToMatrixList(ma_msg):
     dim = len(ma_msg.layout.dim)
@@ -192,11 +178,27 @@ def makeSphere(radius):
     actor.SetMapper(mapper)
     return actor
 
-
 class UserWidget(QWidget):
     bridge = CvBridge()
     def __init__(self, camera, camSync, markerTopic, robotFrame, tipFrame, cameraFrame, masterWidget=None, parent=None):
         super(UserWidget, self).__init__(parent=parent)
+
+        # Set up UI
+        uiPath = cleanResourcePath("package://dvrk_vision/src/dvrk_vision/overlay_widget.ui")
+        uic.loadUi(uiPath, self)
+        # Set up QT sliders and buttons
+        self.opacitySlider.valueChanged.connect(self.sliderChanged) 
+        self.textureCheckBox.stateChanged.connect(self.checkBoxChanged)
+        self.textureCheckBox.setText("Show GP mesh")
+        self.textureCheckBox.setChecked(True)
+        self.POICheckBox = QCheckBox("Show markers", self)
+        self.POICheckBox.setChecked(True)
+        self.POICheckBox.stateChanged.connect(self.checkBoxChanged)
+        self.horizontalLayout.addWidget(self.POICheckBox)
+        self.clearButton = QPushButton("Clear markers", self)
+        self.clearButton.pressed.connect(self.clearPOI)
+        self.horizontalLayout.addWidget(self.clearButton)
+
         # Load in variables
         self.robotFrame = robotFrame
         self.tipFrame = tipFrame
@@ -206,63 +208,37 @@ class UserWidget(QWidget):
         self.camSync = camSync
         self.tfBuffer = self.camSync._tfBuffer
 
-        uiPath = cleanResourcePath("package://dvrk_vision/src/dvrk_vision/overlay_widget.ui")
-        # Get CV image from path
-        uic.loadUi(uiPath, self)
-        self.vtkWidget = QVTKStereoViewer(camera, parent=self)
-        self.vtkWidget.renderSetup = self.renderSetup
-        self.vtkWidget.imageProc = self.imageProc
+        # Set Defaults
+        self.gpUpdateRate = rospy.Rate(5)
+        self.POI = []
         self.pausePOI = True
-
-        # Add vtk widget
-        self.vl = QVBoxLayout()
-        self.vl.addWidget(self.vtkWidget)
-        self.vtkFrame.setLayout(self.vl)
-
+        self.organFrame = None
         self.otherWindows = []
         if self.masterWidget is not None:
             self.masterWidget.otherWindows.append(self)
             self.otherWindows.append(self.masterWidget)
 
-        # Set up QT slider for opacity
-        self.opacitySlider.valueChanged.connect(self.sliderChanged) 
-        self.textureCheckBox.stateChanged.connect(self.checkBoxChanged)
-
+        # Set up VTK widget
+        self.vtkWidget = QVTKStereoViewer(camera, parent=self)
+        self.vtkWidget.renderSetup = self.renderSetup
+        self.vtkWidget.imageProc = self.imageProc
+        # Add VTK widget to window
+        self.vl = QVBoxLayout()
+        self.vl.addWidget(self.vtkWidget)
+        self.vtkFrame.setLayout(self.vl)
+        # Set up interactor
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
         self.iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballActor())
-
-        if not rospy.get_param('/university') == 'jhu':
-            self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
-        else:
-            self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
-
-
-        self.organFrame = None
-
-        self.textureCheckBox.setText("Show GP mesh")
-        self.textureCheckBox.setChecked(True)
-        self.POICheckBox = QCheckBox("Show markers", self)
-        self.POICheckBox.setChecked(True)
-        self.POICheckBox.stateChanged.connect(self.checkBoxChanged)
-        self.horizontalLayout.addWidget(self.POICheckBox)
-        self.POI = []
-
-        
-        self.clearButton = QPushButton("Clear markers", self)
-        self.clearButton.pressed.connect(self.clearPOI)
-        self.horizontalLayout.addWidget(self.clearButton)
-
+        # Set up VTK to publish render
+        self.winToImage = vtk.vtkWindowToImageFilter()
+        self.winToImage.SetInput(self.vtkWidget._RenderWindow)
+        # Start the widget
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
 
-        self.pointSelectPub = rospy.Publisher('/dvrk_vision/user_POI', Point, latch = False, queue_size = 1)
-        self.clearPOIPub    = rospy.Publisher('/dvrk_vision/clear_POI', Empty, latch = False, queue_size = 1)
-        self.clearPOISub = rospy.Subscriber('/control/clearPOI',Empty,self.clearCB,queue_size=1)
-        self.pausePOISub = rospy.Subscriber('/control/pausePOI',Bool,self.pauseCB,queue_size=1)
-
+        # Get defaults from parameter server
         psmName = rospy.get_param('~psm_name')
         self.filePath = rospy.get_param('~camera_registration')
-
         organLetter=str(rospy.get_param('/organ_letter'))
         with open(self.filePath, 'r') as f:
             data = yaml.load(f)
@@ -272,16 +248,22 @@ class UserWidget(QWidget):
         except KeyError:
             rospy.logwarn("No vtk transform found. Using default camera transformation")
             self.organMatrix =np.eye(4) 
-
         self.cameraTransform = arrayToPyKDLFrame(camTransform)
+
+        # Set up ros publishers and subscribers
+        if not rospy.get_param('/university') == 'jhu':
+            self.iren.AddObserver("EndInteractionEvent", self.interactionChange)
+        else:
+            self.interactionSub = rospy.Subscriber('/control/saveOrgan',Empty,self.interactionCB,queue_size=1)
+        self.pointSelectPub = rospy.Publisher('/dvrk_vision/user_POI', Point, latch = False, queue_size = 1)
+        self.clearPOIPub    = rospy.Publisher('/dvrk_vision/clear_POI', Empty, latch = False, queue_size = 1)
+        self.clearPOISub = rospy.Subscriber('/control/clearPOI',Empty,self.clearCB,queue_size=1)
+        self.pausePOISub = rospy.Subscriber('/control/pausePOI',Bool,self.pauseCB,queue_size=1)
         self.dvrkTopic = '/dvrk/' + psmName + "/position_cartesian_current"
         self.forceTopic = '/dvrk/' + psmName + '_FT/raw_wrench'
         self.camSync.addTopics([self.dvrkTopic, self.forceTopic])
-
         pubTopic = self.vtkWidget.cam.topic[:-len(self.vtkWidget.cam.topic.split('/')[-1])] + "image_rendered"
         self.imagePub = rospy.Publisher(pubTopic, Image, queue_size=1)
-        self.winToImage = vtk.vtkWindowToImageFilter()
-        self.winToImage.SetInput(self.vtkWidget._RenderWindow)
 
     def interactionChange(self, obj, event):
         if event=="EndInteractionEvent":
@@ -317,10 +299,67 @@ class UserWidget(QWidget):
             window.textureCheckBox.setChecked(self.textureCheckBox.isChecked())
 
     def clearCB(self,emptyData):
+        # 
         self.clearPOI()
 
     def pauseCB(self,boolData):
+        # 
         self.pausePOI = boolData.data
+
+    def markerCB(self, data):
+        meshPath = cleanResourcePath(data.mesh_resource)
+        if meshPath != self.meshPath:
+            self.meshPath = meshPath
+            try:
+                self.organFrame = data.header.frame_id
+                if self.organFrame[0] == "/":
+                    self.organFrame = self.organFrame[1:]
+                poseCamera = self.tfBuffer.lookup_transform(self.cameraFrame, self.organFrame, rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+                rospy.logwarn(e)
+                return
+
+            posCam = poseCamera.transform.translation
+            rotCam = poseCamera.transform.rotation
+            matCam = transformations.quaternion_matrix([rotCam.x, rotCam.y, rotCam.z, rotCam.w])
+            matCam[0:3,3] = [posCam.x, posCam.y, posCam.z]
+
+            transformCam = vtk.vtkTransform()
+            transformCam.SetMatrix(matCam.ravel())
+
+            extension = os.path.splitext(meshPath)[-1].lower()
+
+            # Replace with OBJ if possible for texture coordinates
+            if extension == '.stl' or extension == '.ply':
+                if os.path.isfile(meshPath[0:-3] + 'obj'):
+                    meshPath = meshPath[0:-3] + 'obj'
+                else:
+                    rospy.logwarn_throttle(30, "Unable to find .obj for " + meshPath + ". Texture coordinates may be incorrect")
+            print(meshPath, extension)
+
+            polydata = loadMesh(meshPath, 1)
+
+            # Scale STL
+            transform = vtk.vtkTransform()
+            transformFilter = vtk.vtkTransformFilter()
+            transformFilter.SetTransform(transformCam)
+            transformFilter.SetInputData(polydata)
+            transformFilter.Update()
+
+            organPolyData = transformFilter.GetOutput()
+            self._updateActorPolydata(self.actorOrgan, organPolyData)
+            if self.converter != None:
+                del(self.converter)
+            self.converter = uvtoworld.UVToWorldConverter(organPolyData)
+
+    def pointsCB(self, points):
+        # Preetham's stuff is in millimeters
+        pts = multiArrayToMatrixList(points)
+        self.points = pts * 0.001
+
+    def stiffnessCB(self, stiffness):
+        # 
+        self.stiffness = multiArrayToMatrixList(stiffness).transpose()
 
     def clearPOI(self):
         for actor in self.POI:
@@ -465,15 +504,6 @@ class UserWidget(QWidget):
         self.greenLine.GetProperty().LightingOff()
         self.vtkWidget.ren.AddActor(self.greenLine)
 
-        # Set up timer callback
-        cb = vtkTimerCallback(self.vtkWidget._RenderWindow)
-        cb.update = self.update
-        self.iren.AddObserver('TimerEvent', cb.execute)
-        self.iren.CreateRepeatingTimer(15)
-
-    def setText(self,textInput):
-        self.vecText.SetText(textInput)
-
     def _updateActorPolydata(self,actor,polydata,color=None):
         # Modifies an actor with new polydata
         bounds = polydata.GetBounds()
@@ -492,89 +522,35 @@ class UserWidget(QWidget):
             actor.GetProperty().SetColor(1, 0, 0)
         self.sliderChanged()
 
-    def addPOI(self):
-        if self.organFrame is None or self.pausePOI:
-            return
-        poseRobot = self.tfBuffer.lookup_transform(self.cameraFrame, self.tipFrame, rospy.Time())
-        posRobot = poseRobot.transform.translation
-        rotRobot = poseRobot.transform.rotation
-        matRobot = transformations.quaternion_matrix([rotRobot.x, rotRobot.y, rotRobot.z, rotRobot.w])
+    # Bar processing
+    def imageProc(self,image):
+        self.winToImage.Modified()
+        self.winToImage.Update()
+        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
+        shape = self.vtkWidget.cam.image.shape
+        out = cv2.resize(render, (shape[1], shape[0]))
+        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
 
-        actor = vtk.vtkActor()
-        actor.ShallowCopy(self.sphere)
-        posTip = np.array([posRobot.x, posRobot.y, posRobot.z])# + np.array(matRobot[3,0:3].tolist())
-        actor.SetPosition(posTip[0], posTip[1], posTip[2])
+        if self.masterWidget is not None:
+            return image
 
-        self.pointSelectPub.publish(Point(posTip[0],posTip[1],posTip[2]))
-
-        self.POI.append(actor)
-        self.actorGroup.AddPart(actor);
-
-    def markerCB(self, data):
-        meshPath = cleanResourcePath(data.mesh_resource)
-        if meshPath != self.meshPath:
-            self.meshPath = meshPath
-            try:
-                self.organFrame = data.header.frame_id
-                if self.organFrame[0] == "/":
-                    self.organFrame = self.organFrame[1:]
-                poseCamera = self.tfBuffer.lookup_transform(self.cameraFrame, self.organFrame, rospy.Time())
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                rospy.logwarn(e)
-                return
-
-            posCam = poseCamera.transform.translation
-            rotCam = poseCamera.transform.rotation
-            matCam = transformations.quaternion_matrix([rotCam.x, rotCam.y, rotCam.z, rotCam.w])
-            matCam[0:3,3] = [posCam.x, posCam.y, posCam.z]
-
-            transformCam = vtk.vtkTransform()
-            transformCam.SetMatrix(matCam.ravel())
-
-            extension = os.path.splitext(meshPath)[-1].lower()
-
-            # Replace with OBJ if possible for texture coordinates
-            if extension == '.stl' or extension == '.ply':
-                if os.path.isfile(meshPath[0:-3] + 'obj'):
-                    meshPath = meshPath[0:-3] + 'obj'
-                else:
-                    rospy.logwarn_throttle(30, "Unable to find .obj for " + meshPath + ". Texture coordinates may be incorrect")
-            print(meshPath, extension)
-
-            polydata = loadMesh(meshPath, 1)
-
-            # Scale STL
-            transform = vtk.vtkTransform()
-            transformFilter = vtk.vtkTransformFilter()
-            transformFilter.SetTransform(transformCam)
-            transformFilter.SetInputData(polydata)
-            transformFilter.Update()
-
-            organPolyData = transformFilter.GetOutput()
-            self._updateActorPolydata(self.actorOrgan, organPolyData)
-            if self.converter != None:
-                del(self.converter)
-            self.converter = uvtoworld.UVToWorldConverter(organPolyData)
-
-    def pointsCB(self, points):
-        # print("Getting Points")
-        # Preetham's stuff is in millimeters
-        pts = multiArrayToMatrixList(points)
-        # print(len(pts))
-        self.points = pts * 0.001
-
-    def stiffnessCB(self, stiffness):
-        # print("Getting Stiffness")
-        self.stiffness = multiArrayToMatrixList(stiffness).transpose()
-        # print(len(self.stiffness))
-
-    def update(self):
+        self.forceUpdate()
+        self.gpUpdate()
+        return image
+        
+    def gpUpdate(self):
         if (not self.isVisible()):
             return
         try:
             pointLen = len(self.points)
         except TypeError:
             return
+
+        curr_time = rospy.rostime.get_rostime() 
+        if curr_time - self.gpUpdateRate.last_time < self.gpUpdateRate.sleep_dur:
+            return
+        self.gpUpdateRate.last_time = curr_time
+        print("Updating GP")
 
         if len(self.points) < 2:
             return
@@ -624,7 +600,7 @@ class UserWidget(QWidget):
             self.gpPolyData.GetPointData().SetScalars(colors)
 
         if self.converter == None:
-            return   
+            return
 
         # Project points into UV space        
         texCoords = self.converter.toUVSpace(points)[:, 0:2]
@@ -655,25 +631,14 @@ class UserWidget(QWidget):
         self.actorOrgan.textureOnOff(True)
         self.actorOrgan.GetProperty().LightingOn()
 
-
-    # Bar processing
-    def imageProc(self,image):
-        self.winToImage.Modified()
-        self.winToImage.Update()
-        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
-        shape = self.vtkWidget.cam.image.shape
-        out = cv2.resize(render, (shape[1], shape[0]))
-        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
-
-        if self.masterWidget is not None:
-            return image
+    def forceUpdate(self):
         # Get current force
         fmsg = self.camSync.getMsg(self.forceTopic)
         # print "Getting wrench"
         # print fmsg
         # print type(fmsg)
         if type(fmsg) is not WrenchStamped:
-            return image
+            return
         force = [fmsg.wrench.force.x, fmsg.wrench.force.y, fmsg.wrench.force.z]
         force = np.linalg.norm(force)
         targetF = 2 # Newtons
@@ -688,7 +653,7 @@ class UserWidget(QWidget):
         # Get robot pose
         posMsg = self.camSync.getMsg(self.dvrkTopic)
         if type(posMsg) is not PoseStamped:
-            return image
+            return
         pos = posemath.fromMsg(posMsg.pose)
 
         self.forceBar.GetProperty().SetColor(color[0], color[1], color[2])
@@ -706,15 +671,35 @@ class UserWidget(QWidget):
         posMat[1,0:3] = posMat[1,0:3] * scalePos
         setActorMatrix(self.forceBar, posMat)
 
-        return image
+        return
+
+    def setText(self,textInput):
+        # 
+        self.vecText.SetText(textInput)
 
     def setBarVisibility(self,b_input=True):
         self.bar.SetVisibility(b_input)
         self.forceBar.SetVisibility(b_input)
         self.greenLine.SetVisibility(b_input)
 
-    def setText(self,textInput):
-        self.vecText.SetText(textInput)
+    def addPOI(self):
+        if self.organFrame is None or self.pausePOI:
+            return
+        poseRobot = self.tfBuffer.lookup_transform(self.cameraFrame, self.tipFrame, rospy.Time())
+        posRobot = poseRobot.transform.translation
+        rotRobot = poseRobot.transform.rotation
+        matRobot = transformations.quaternion_matrix([rotRobot.x, rotRobot.y, rotRobot.z, rotRobot.w])
+
+        actor = vtk.vtkActor()
+        actor.ShallowCopy(self.sphere)
+        posTip = np.array([posRobot.x, posRobot.y, posRobot.z])# + np.array(matRobot[3,0:3].tolist())
+        actor.SetPosition(posTip[0], posTip[1], posTip[2])
+
+        self.pointSelectPub.publish(Point(posTip[0],posTip[1],posTip[2]))
+
+        self.POI.append(actor)
+        self.actorGroup.AddPart(actor);
+
 
 def arrayToPyKDLRotation(array):
     x = PyKDL.Vector(array[0][0], array[1][0], array[2][0])
@@ -735,6 +720,8 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()
+    rosThread.update = app.processEvents
+    
     # markerTopic = rospy.get_param("~marker_topic")
     # robotFrame = rospy.get_param("~robot_frame")
     # cameraFrame = rospy.get_param("~robot_frame")
