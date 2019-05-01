@@ -100,7 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.displayList=[]
 
-        self.hideButtons()
+        # self.hideButtons()
 
     def closeEvent(self, qCloseEvent):
         for window in self.otherWindows:
@@ -168,6 +168,8 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     rosThread = vtktools.QRosThread()
     rosThread.start()
+    rosThread.update = app.processEvents
+
     frameRate = 15
     slop = 1.0 / frameRate
     cams = StereoCameras("left/image_rect",

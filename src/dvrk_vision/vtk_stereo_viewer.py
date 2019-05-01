@@ -109,7 +109,7 @@ class QVTKStereoViewer(QVTKRenderWindowInteractor):
             self.aspectRatio = bgImage.shape[1] / float(bgImage.shape[0])
             vtktools.numpyToVtkImage(bgImage,self.image)
             vtktools.numpyToVtkImage(fgImage,self.fgImage)
-            self._Iren.Render()
+            self.update()
 
     def showEvent(self, event):
         if not self.shown:
