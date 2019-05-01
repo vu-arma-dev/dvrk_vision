@@ -232,6 +232,7 @@ class UserWidget(QWidget):
         # Set up VTK to publish render
         self.winToImage = vtk.vtkWindowToImageFilter()
         self.winToImage.SetInput(self.vtkWidget._RenderWindow)
+        self.winToImage.ReadFrontBufferOff()
         # Start the widget
         self.vtkWidget.Initialize()
         self.vtkWidget.start()
@@ -524,12 +525,6 @@ class UserWidget(QWidget):
 
     # Bar processing
     def imageProc(self,image):
-        self.winToImage.Modified()
-        self.winToImage.Update()
-        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
-        shape = self.vtkWidget.cam.image.shape
-        out = cv2.resize(render, (shape[1], shape[0]))
-        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
 
         if self.masterWidget is not None:
             return image
@@ -551,6 +546,13 @@ class UserWidget(QWidget):
             return
         self.gpUpdateRate.last_time = curr_time
         print("Updating GP")
+
+        self.winToImage.Modified()
+        self.winToImage.Update()
+        render = vtktools.vtkImageToNumpy(self.winToImage.GetOutput())
+        shape = self.vtkWidget.cam.image.shape
+        out = cv2.resize(render, (shape[1], shape[0]))
+        self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
 
         if len(self.points) < 2:
             return

@@ -151,7 +151,7 @@ class QRosThread(QThread):
         # Initialize the node
         if rospy.get_node_uri() == None:
             rospy.init_node("vtk_test")
-        self.rate = rospy.Rate(24) # 24hz
+        self.rate = rospy.Rate(100) # 24hz
     def run(self):
         while not rospy.is_shutdown():
             self.update()
