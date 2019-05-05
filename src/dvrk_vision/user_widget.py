@@ -573,6 +573,8 @@ class UserWidget(QWidget):
         points = points[np.where(scalars > 0)[0], :]
         scalars = scalars[np.where(scalars > 0)[0], :]
 
+        if len(points) < 4 or len(scalars)<4:
+            return
         self.gpPolyData.Reset()
         vtkPoints = vtk.vtkPoints()
         vtkCells = vtk.vtkCellArray()
