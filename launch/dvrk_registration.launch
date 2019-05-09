@@ -11,17 +11,17 @@
   <arg name="device_left" default="/dev/video0"/>
   <arg name="device_right" default="/dev/video1"/>
 
-  <include file="$(find dvrk_vision)/launch/just_cams.launch">
+  <include file="$(find dvrk_vision)/launch/just_cams_sparkfun.launch">
 
-    <arg name="width" value="$(arg width)" />
-    <arg name="height" value="$(arg height)" />
-    <arg name="single_image_from_camera" value="false" />
+    <arg name="width" default="$(arg width)" />
+    <arg name="height" default="$(arg height)" />
+<!--     <arg name="single_image_from_camera" value="false" /> -->
 
-    <arg name="camera_info_url_left" value="$(arg camera_info_url_left)" />
-    <arg name="camera_info_url_right" value="(arg camera_info_url_right)"/>
+<!--     <arg name="camera_info_url_left" value="$(arg camera_info_url_left)" />
+    <arg name="camera_info_url_right" value="(arg camera_info_url_right)"/> -->
 
-    <arg name="device_left" default="$(arg device_left)"/>
-    <arg name="device_right" default="$(arg device_right)"/>
+<!--     <arg name="device_left" default="$(arg device_left)"/>
+    <arg name="device_right" default="$(arg device_right)"/> -->
     <arg name="camera_parent" default="$(arg arm)_psm_base_link"/>
   </include>
 

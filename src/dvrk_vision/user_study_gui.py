@@ -100,7 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.displayList=[]
 
-        # self.hideButtons()
+        self.hideButtons()
 
     def closeEvent(self, qCloseEvent):
         for window in self.otherWindows:
