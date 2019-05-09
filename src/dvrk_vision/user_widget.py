@@ -545,7 +545,7 @@ class UserWidget(QWidget):
         if curr_time - self.gpUpdateRate.last_time < self.gpUpdateRate.sleep_dur:
             return
         self.gpUpdateRate.last_time = curr_time
-        print("Updating GP")
+        # print("Updating GP")
 
         self.winToImage.Modified()
         self.winToImage.Update()
@@ -554,9 +554,12 @@ class UserWidget(QWidget):
         out = cv2.resize(render, (shape[1], shape[0]))
         self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
 
-        if len(self.points) < 2:
+        if len(self.points) < 4 or self.meshPath == "":
+            self.texture = np.ones((self.resolution, self.resolution, 4), np.uint8) * 255
+            self.texture[:,:,3] = 0
+            self.actorOrgan.setTexture(self.texture.copy())
             return
-        if len(self.points) != len(self.stiffness) or self.meshPath == "":
+        if len(self.points) != len(self.stiffness):
             return
         if np.all(self.points == self.oldPoints):
             return
@@ -573,8 +576,6 @@ class UserWidget(QWidget):
         points = points[np.where(scalars > 0)[0], :]
         scalars = scalars[np.where(scalars > 0)[0], :]
 
-        if len(points) < 4 or len(scalars)<4:
-            return
         self.gpPolyData.Reset()
         vtkPoints = vtk.vtkPoints()
         vtkCells = vtk.vtkCellArray()
