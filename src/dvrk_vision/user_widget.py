@@ -307,6 +307,11 @@ class UserWidget(QWidget):
         # 
         self.pausePOI = boolData.data
 
+    def resetGPTexture(self):
+        self.texture = np.ones((self.resolution, self.resolution, 4), np.uint8) * 255
+        self.texture[:,:,3] = 0
+        self.actorOrgan.setTexture(self.texture.copy())
+
     def markerCB(self, data):
         meshPath = cleanResourcePath(data.mesh_resource)
         if meshPath != self.meshPath:
@@ -555,9 +560,7 @@ class UserWidget(QWidget):
         self.imagePub.publish(self.bridge.cv2_to_imgmsg(out, "rgb8"))
 
         if len(self.points) < 4 or self.meshPath == "":
-            self.texture = np.ones((self.resolution, self.resolution, 4), np.uint8) * 255
-            self.texture[:,:,3] = 0
-            self.actorOrgan.setTexture(self.texture.copy())
+            self.resetGPTexture()
             return
         if len(self.points) != len(self.stiffness):
             return
@@ -575,6 +578,10 @@ class UserWidget(QWidget):
         scalars = self.stiffness
         points = points[np.where(scalars > 0)[0], :]
         scalars = scalars[np.where(scalars > 0)[0], :]
+
+        if len(scalars)<5:
+            self.resetGPTexture()
+            return
 
         self.gpPolyData.Reset()
         vtkPoints = vtk.vtkPoints()
