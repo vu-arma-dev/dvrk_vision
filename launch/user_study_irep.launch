@@ -1,0 +1,26 @@
+<launch>
+
+  <arg name="namespace" default="/dvrk/"/>
+  <arg name="master" default="MTMR"/>   
+  <arg name="slave" default="PSM1"/>   
+  <arg name="screen_one" default="2"/>
+  <arg name="screen_two" default="1"/>
+  <arg name="scale" default=".95" />
+  <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
+
+  <!-- <include file="$(find dvrk_vision)/launch/just_cams_irep.launch" /> -->
+  <include file="$(find dvrk_vision)/launch/just_cams_vu.launch" />
+  
+  <node ns="stereo" name="main_gui" type="irep_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
+    <param name="camera_registration" value="$(arg camera_registration)" />
+    <param name="marker_topic" value="$(arg namespace)$(arg master)_$(arg slave)/proxy_slave_phantom" />
+    <param name="robot_frame" value="$(arg slave)_SIM_psm_base_link"/>
+    <param name="end_effector_frame" value="vf_point"/>
+    <param name="psm_name" value="$(arg slave)"/>
+    <param name="camera_frame" value="stereo_camera_frame"/>
+
+    <param name="screen_one" value="$(arg screen_one)"/>
+    <param name="screen_two" value="$(arg screen_two)"/>
+  </node>
+
+</launch>
