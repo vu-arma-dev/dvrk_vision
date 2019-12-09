@@ -8,8 +8,8 @@
   <arg name="scale" default=".95" />
   <arg name="camera_registration" default="$(find dvrk_vision)/defaults/registration_params_vu.yaml" />
 
-  <!-- <include file="$(find dvrk_vision)/launch/just_cams_irep.launch" /> -->
-  <include file="$(find dvrk_vision)/launch/just_cams_vu.launch" />
+  <include file="$(find dvrk_vision)/launch/just_cams_amazon_stereo.launch" />
+  <!-- <include file="$(find dvrk_vision)/launch/just_cams_vu.launch" /> -->
   
   <node ns="stereo" name="main_gui" type="irep_gui.py" pkg="dvrk_vision" output="screen" clear_params="true" required="true">
     <param name="camera_registration" value="$(arg camera_registration)" />
